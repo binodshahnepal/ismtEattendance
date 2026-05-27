@@ -99,6 +99,27 @@ export const dbService = {
     return MockDatabase.addModule(id, title, programId, stage, trimester, tutor, batchId, section);
   },
 
+  async bulkEnroll(studentIds, moduleId) {
+    if (!Array.isArray(studentIds) || studentIds.length === 0) return true;
+
+    if (isCloudActive()) {
+      const enrollmentsToInsert = studentIds.map(studentId => ({
+        student_id: studentId,
+        module_id: moduleId,
+        status: 'Active'
+      }));
+
+      const { error } = await supabase
+        .from('enrollments')
+        .upsert(enrollmentsToInsert, { onConflict: 'student_id,module_id' });
+
+      if (!error) return true;
+      console.error("Supabase bulkEnroll error:", error);
+    }
+
+    return MockDatabase.bulkEnroll(studentIds, moduleId);
+  },
+
   // --- 4. Student Queries (Batch-Filtered) ---
   async getStudents(programId = null, stage = null, trimester = null, section = null, batchId = null, includeAllStatuses = false) {
     if (isCloudActive()) {

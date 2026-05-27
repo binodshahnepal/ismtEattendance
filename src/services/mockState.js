@@ -529,6 +529,31 @@ class MockDatabaseClass {
     return true;
   }
 
+  bulkEnroll(studentIds, moduleId) {
+    const mod = this.data.modules[moduleId];
+    if (!mod || !Array.isArray(studentIds)) return false;
+
+    studentIds.forEach(studentId => {
+      const student = this.data.students.find(s => s.id === studentId);
+      if (!student) return;
+
+      const existing = this.data.enrollments.find(e => e.student_id === studentId && e.module_id === moduleId);
+      if (existing) {
+        existing.status = 'Active';
+      } else {
+        this.data.enrollments.push({
+          id: `enr_${studentId}_${moduleId}`,
+          student_id: studentId,
+          module_id: moduleId,
+          status: 'Active'
+        });
+      }
+    });
+
+    this.save();
+    return true;
+  }
+
   manualEnroll(studentId, moduleId) {
     const student = this.data.students.find(s => s.id === studentId);
     const mod = this.data.modules[moduleId];

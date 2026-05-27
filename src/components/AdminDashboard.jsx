@@ -60,6 +60,8 @@ const AdminDashboard = () => {
   const [newModTutor, setNewModTutor] = useState('');
   const [newModBatch, setNewModBatch] = useState('jan_2026');
   const [newModSection, setNewModSection] = useState('A');
+  const [newModRegistrationMode, setNewModRegistrationMode] = useState('all');
+  const [newModSelectedStudents, setNewModSelectedStudents] = useState([]);
 
   // Global Admin filters for directory table
   const [adminProgFilter, setAdminProgFilter] = useState('');
@@ -81,6 +83,7 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [studentSearch, setStudentSearch] = useState('');
   const [migrationLogs, setMigrationLogs] = useState([]);
+  const [moduleEnrollmentCounts, setModuleEnrollmentCounts] = useState({});
 
   useEffect(() => {
     loadAllAdminData();
@@ -123,6 +126,19 @@ const AdminDashboard = () => {
     }
   }, [editBatch, batches, editSection, editingStudent]);
 
+  useEffect(() => {
+    const eligibleIds = students
+      .filter(s => s.status === 'Active')
+      .filter(s => s.program_id === newModProg)
+      .filter(s => s.stage === parseInt(newModStage))
+      .filter(s => s.trimester === parseInt(newModTri))
+      .filter(s => s.batch_id === newModBatch)
+      .filter(s => s.section === newModSection)
+      .map(s => s.id);
+
+    setNewModSelectedStudents(prev => prev.filter(id => eligibleIds.includes(id)));
+  }, [students, newModProg, newModStage, newModTri, newModBatch, newModSection]);
+
   const loadAllAdminData = async () => {
     const bts = await dbService.getBatches();
     setBatches(bts);
@@ -132,6 +148,13 @@ const AdminDashboard = () => {
 
     const mods = await dbService.getModules();
     setModules(mods);
+
+    const counts = {};
+    await Promise.all(mods.map(async (mod) => {
+      const enrolled = await dbService.getEnrolledStudents(mod.id);
+      counts[mod.id] = enrolled.length;
+    }));
+    setModuleEnrollmentCounts(counts);
 
     const studs = await dbService.getStudents(null, null, null, null, null, true);
     setStudents(studs);
@@ -500,6 +523,16 @@ const AdminDashboard = () => {
       alert("Please fill in code, title, tutor, batch, and section details.");
       return;
     }
+
+    const studentsToRegister = newModRegistrationMode === 'all'
+      ? moduleCandidateStudents.map(s => s.id)
+      : newModSelectedStudents;
+
+    if (newModRegistrationMode === 'custom' && studentsToRegister.length === 0) {
+      alert("Please select at least one student for this custom module registration.");
+      return;
+    }
+
     await dbService.addModule(
       newModId,
       newModTitle,
@@ -510,10 +543,17 @@ const AdminDashboard = () => {
       newModBatch,
       newModSection
     );
-    alert("New Academic Module created successfully!");
+
+    if (studentsToRegister.length > 0) {
+      await dbService.bulkEnroll(studentsToRegister, newModId);
+    }
+
+    alert(`New Academic Module created successfully with ${studentsToRegister.length} registered student(s)!`);
     setNewModId('');
     setNewModTitle('');
     setNewModTutor('');
+    setNewModRegistrationMode('all');
+    setNewModSelectedStudents([]);
     setIsModOpen(false);
     loadAllAdminData();
   };
@@ -538,6 +578,15 @@ const AdminDashboard = () => {
     batches.flatMap(b => b && b.sections ? b.sections.split(',').map(s => s.trim()) : ['A', 'B'])
   )).sort();
 
+  const moduleCandidateStudents = students
+    .filter(s => s.status === 'Active')
+    .filter(s => s.program_id === newModProg)
+    .filter(s => s.stage === parseInt(newModStage))
+    .filter(s => s.trimester === parseInt(newModTri))
+    .filter(s => s.batch_id === newModBatch)
+    .filter(s => s.section === newModSection)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   // Filter Directory Table
   const filteredStudents = students.filter(s => {
     if (adminProgFilter && s.program_id !== adminProgFilter) return false;
@@ -557,11 +606,12 @@ const AdminDashboard = () => {
     { id: 'setup', label: 'Setup' },
     { id: 'leaves', label: 'Leaves' },
     { id: 'students', label: 'Students' },
+    { id: 'modules', label: 'Modules' },
     { id: 'batches', label: 'Batches' },
     { id: 'programs', label: 'Programs' },
     { id: 'migrations', label: 'History' }
   ];
-  const directoryTabs = ['students', 'batches', 'programs', 'migrations'];
+  const directoryTabs = ['students', 'modules', 'batches', 'programs', 'migrations'];
 
   return (
     <div className="admin-console">
@@ -1083,6 +1133,7 @@ const AdminDashboard = () => {
           <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.03)', padding: '0.3rem', borderRadius: '12px', border: '1px solid var(--border-glass)', gap: '0.25rem' }}>
               {[
               { id: 'students', label: 'Student Roster' },
+              { id: 'modules', label: 'Modules' },
               { id: 'batches', label: 'Intakes & Sections' },
               { id: 'programs', label: 'Programs Grid' },
               { id: 'migrations', label: 'Migration History' }
@@ -1245,6 +1296,57 @@ const AdminDashboard = () => {
                       })}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: MODULE REGISTRATION LEDGER */}
+          {activeTab === 'modules' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.05rem', color: 'var(--brand-blue)', marginBlockEnd: '0.2rem' }}>Program Stage Modules</h3>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Each module code belongs to a program, stage, trimester, intake, and section with its own registered student set.
+                  </p>
+                </div>
+                <button className="btn primary" type="button" style={{ minHeight: '38px', width: 'auto' }} onClick={() => setIsModOpen(true)}>
+                  Add Module
+                </button>
+              </div>
+
+              <div className="module-ledger-grid">
+                {modules.length === 0 ? (
+                  <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                    No modules have been configured yet.
+                  </div>
+                ) : (
+                  modules
+                    .sort((a, b) => `${a.program_id}-${a.stage}-${a.trimester}-${a.id}`.localeCompare(`${b.program_id}-${b.stage}-${b.trimester}-${b.id}`))
+                    .map(mod => {
+                      const prog = programs.find(p => p.id === mod.program_id);
+                      const batch = batches.find(b => b.id === mod.batch_id);
+                      return (
+                        <div key={mod.id} className="module-ledger-card">
+                          <div>
+                            <code>{mod.id}</code>
+                            <h4>{mod.title}</h4>
+                            <p>{prog?.title || 'Unknown Program'}</p>
+                          </div>
+                          <div className="module-ledger-meta">
+                            <span>Stage {mod.stage}</span>
+                            <span>Tri {mod.trimester}</span>
+                            <span>Sec {mod.section}</span>
+                            <span>{batch?.title || 'General Intake'}</span>
+                          </div>
+                          <div className="module-ledger-footer">
+                            <span>{mod.tutor}</span>
+                            <strong>{moduleEnrollmentCounts[mod.id] || 0} registered</strong>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
               </div>
             </div>
           )}
@@ -1498,7 +1600,7 @@ const AdminDashboard = () => {
 
       {isProgOpen && (
         <div className="modal-overlay active">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
+          <div className="modal-content" style={{ maxWidth: '560px' }}>
             <div className="modal-header">
               <h3 style={{ fontWeight: 700, color: 'var(--brand-blue)' }}>Add Program</h3>
               <button className="modal-close-btn" onClick={() => setIsProgOpen(false)}>✕</button>
@@ -1582,6 +1684,74 @@ const AdminDashboard = () => {
               <label>Assigned Tutor</label>
               <input type="text" className="form-input" placeholder="e.g. Dr. Susan Mahato" value={newModTutor} onChange={(e) => setNewModTutor(e.target.value)} />
             </div>
+
+            <div className="form-group">
+              <label>Student Registration</label>
+              <div className="module-registration-toggle">
+                <button
+                  type="button"
+                  className={newModRegistrationMode === 'all' ? 'active' : ''}
+                  onClick={() => setNewModRegistrationMode('all')}
+                >
+                  All cohort students
+                </button>
+                <button
+                  type="button"
+                  className={newModRegistrationMode === 'custom' ? 'active' : ''}
+                  onClick={() => setNewModRegistrationMode('custom')}
+                >
+                  Custom selection
+                </button>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBlockStart: '0.4rem' }}>
+                Matching cohort: {moduleCandidateStudents.length} active student(s) in this program, stage, trimester, intake, and section.
+              </p>
+            </div>
+
+            {newModRegistrationMode === 'custom' && (
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
+                  <label style={{ margin: 0 }}>Choose Registered Students</label>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ minHeight: '30px', padding: '0.25rem 0.7rem', fontSize: '0.75rem', width: 'auto' }}
+                    onClick={() => setNewModSelectedStudents(moduleCandidateStudents.map(s => s.id))}
+                    disabled={moduleCandidateStudents.length === 0}
+                  >
+                    Select All
+                  </button>
+                </div>
+                <div className="module-registration-list">
+                  {moduleCandidateStudents.length === 0 ? (
+                    <div style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
+                      No active students match this module cohort.
+                    </div>
+                  ) : (
+                    moduleCandidateStudents.map(student => (
+                      <label key={student.id} className="module-registration-student">
+                        <input
+                          type="checkbox"
+                          checked={newModSelectedStudents.includes(student.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setNewModSelectedStudents([...newModSelectedStudents, student.id]);
+                            } else {
+                              setNewModSelectedStudents(newModSelectedStudents.filter(id => id !== student.id));
+                            }
+                          }}
+                        />
+                        <span>
+                          <strong>{student.name}</strong>
+                          <small>{student.email}</small>
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
             <button className="btn primary" style={{ width: '100%', justifyContent: 'center', marginBlockStart: '1rem', background: 'var(--brand-orange)' }} onClick={handleAddModule}>
               Create Module
             </button>
