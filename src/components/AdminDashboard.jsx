@@ -10,6 +10,36 @@ import { dbService } from '../services/dbService';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 
+const STAGE_UNIT_TEMPLATES = {
+  1: [
+    { id: 'academic_skills', title: 'Academic Skills and Digital Literacy', trimester: 1 },
+    { id: 'programming_fundamentals', title: 'Programming Fundamentals', trimester: 1 },
+    { id: 'computer_systems', title: 'Computer Systems', trimester: 1 },
+    { id: 'database_foundations', title: 'Database Foundations', trimester: 2 },
+    { id: 'web_technologies', title: 'Web Technologies', trimester: 2 },
+    { id: 'networking_basics', title: 'Networking Basics', trimester: 3 }
+  ],
+  2: [
+    { id: 'software_engineering', title: 'Software Engineering', trimester: 1 },
+    { id: 'data_structures', title: 'Data Structures and Algorithms', trimester: 1 },
+    { id: 'cloud_computing', title: 'Cloud Computing', trimester: 2 },
+    { id: 'information_security', title: 'Information Security', trimester: 2 },
+    { id: 'research_methods', title: 'Research Methods', trimester: 3 },
+    { id: 'project_management', title: 'Project Management', trimester: 3 }
+  ],
+  3: [
+    { id: 'advanced_development', title: 'Advanced Application Development', trimester: 1 },
+    { id: 'enterprise_systems', title: 'Enterprise Systems', trimester: 1 },
+    { id: 'data_analytics', title: 'Data Analytics', trimester: 2 },
+    { id: 'professional_practice', title: 'Professional Practice', trimester: 2 },
+    { id: 'major_project', title: 'Major Project', trimester: 3 },
+    { id: 'innovation_strategy', title: 'Innovation and Strategy', trimester: 3 }
+  ]
+};
+
+const buildStageUnitModuleId = (programId, stage, unitId, batchId, section) =>
+  `${programId}_s${stage}_${unitId}_${batchId}_sec${section}`.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+
 const AdminDashboard = () => {
   // Lists
   const [batches, setBatches] = useState([]);
@@ -68,6 +98,15 @@ const AdminDashboard = () => {
   const [newModSection, setNewModSection] = useState('A');
   const [newModRegistrationMode, setNewModRegistrationMode] = useState('all');
   const [newModSelectedStudents, setNewModSelectedStudents] = useState([]);
+
+  const [unitEnrollProgram, setUnitEnrollProgram] = useState('bsc_cse');
+  const [unitEnrollStage, setUnitEnrollStage] = useState('1');
+  const [unitEnrollBatch, setUnitEnrollBatch] = useState('jan_2026');
+  const [unitEnrollSection, setUnitEnrollSection] = useState('A');
+  const [unitEnrollTutor, setUnitEnrollTutor] = useState('');
+  const [unitEnrollMode, setUnitEnrollMode] = useState('all');
+  const [selectedStageUnitIds, setSelectedStageUnitIds] = useState(STAGE_UNIT_TEMPLATES[1].map(unit => unit.id));
+  const [unitEnrollSelectedStudents, setUnitEnrollSelectedStudents] = useState([]);
 
   // Global Admin filters for directory table
   const [adminProgFilter, setAdminProgFilter] = useState('');
@@ -146,6 +185,22 @@ const AdminDashboard = () => {
     }
   }, [newModBatch, batches, newModSection]);
 
+  useEffect(() => {
+    const selectedBatchObj = batches.find(b => b.id === unitEnrollBatch);
+    const allowed = selectedBatchObj?.sections ? selectedBatchObj.sections.split(',') : ['A', 'B'];
+    if (allowed.length > 0 && !allowed.includes(unitEnrollSection)) {
+      setUnitEnrollSection(allowed[0]);
+    }
+  }, [unitEnrollBatch, batches, unitEnrollSection]);
+
+  useEffect(() => {
+    const availableUnitIds = (STAGE_UNIT_TEMPLATES[unitEnrollStage] || []).slice(0, 6).map(unit => unit.id);
+    setSelectedStageUnitIds(prev => {
+      const retained = prev.filter(id => availableUnitIds.includes(id));
+      return retained.length > 0 ? retained : availableUnitIds;
+    });
+  }, [unitEnrollStage]);
+
   // Update student edit section when selected batch changes
   useEffect(() => {
     const selectedBatchObj = batches.find(b => b.id === editBatch);
@@ -173,6 +228,18 @@ const AdminDashboard = () => {
 
     setNewModSelectedStudents(prev => prev.filter(id => eligibleIds.includes(id)));
   }, [students, modules, managedModuleId, newModTri, newModBatch, newModSection]);
+
+  useEffect(() => {
+    const eligibleIds = students
+      .filter(s => s.status === 'Active')
+      .filter(s => s.program_id === unitEnrollProgram)
+      .filter(s => s.stage === parseInt(unitEnrollStage))
+      .filter(s => s.batch_id === unitEnrollBatch)
+      .filter(s => s.section === unitEnrollSection)
+      .map(s => s.id);
+
+    setUnitEnrollSelectedStudents(prev => prev.filter(id => eligibleIds.includes(id)));
+  }, [students, unitEnrollProgram, unitEnrollStage, unitEnrollBatch, unitEnrollSection]);
 
   const loadAllAdminData = async () => {
     const bts = await dbService.getBatches();
@@ -204,10 +271,12 @@ const AdminDashboard = () => {
     if (bts.length > 0) {
       setNewStudentBatch(bts[0].id);
       setNewModBatch(bts[0].id);
+      setUnitEnrollBatch(bts[0].id);
     }
     if (progs.length > 0) {
       setNewStudentProgram(progs[0].id);
       setNewModProg(progs[0].id);
+      setUnitEnrollProgram(progs[0].id);
     }
   };
 
@@ -341,6 +410,92 @@ const AdminDashboard = () => {
     });
 
     return true;
+  };
+
+  const ensureSelectedStageUnitModules = async () => {
+    const selectedUnits = (STAGE_UNIT_TEMPLATES[unitEnrollStage] || [])
+      .slice(0, 6)
+      .filter(unit => selectedStageUnitIds.includes(unit.id));
+    const tutorName = unitEnrollTutor.trim();
+    const resolvedModuleIds = [];
+    const knownModules = [...modules];
+
+    for (const unit of selectedUnits) {
+      const moduleId = buildStageUnitModuleId(unitEnrollProgram, unitEnrollStage, unit.id, unitEnrollBatch, unitEnrollSection);
+      const existingModule = knownModules.find(mod => mod.id === moduleId);
+
+      if (existingModule) {
+        await dbService.updateModule(moduleId, {
+          title: unit.title,
+          program_id: unitEnrollProgram,
+          stage: unitEnrollStage,
+          trimester: unit.trimester,
+          tutor: tutorName,
+          batch_id: unitEnrollBatch,
+          section: unitEnrollSection
+        });
+      } else {
+        await dbService.addModule(
+          moduleId,
+          unit.title,
+          unitEnrollProgram,
+          unitEnrollStage,
+          unit.trimester,
+          tutorName,
+          unitEnrollBatch,
+          unitEnrollSection
+        );
+        knownModules.push({
+          id: moduleId,
+          title: unit.title,
+          program_id: unitEnrollProgram,
+          stage: parseInt(unitEnrollStage),
+          trimester: unit.trimester,
+          tutor: tutorName,
+          batch_id: unitEnrollBatch,
+          section: unitEnrollSection
+        });
+      }
+
+      resolvedModuleIds.push(moduleId);
+    }
+
+    return resolvedModuleIds;
+  };
+
+  const handleEnrollStageUnits = async () => {
+    if (!unitEnrollProgram || !unitEnrollStage || !unitEnrollBatch || !unitEnrollSection) {
+      alert("Please choose the program, stage, batch, and section.");
+      return;
+    }
+
+    if (!unitEnrollTutor.trim()) {
+      alert("Please enter the tutor name for this module registration.");
+      return;
+    }
+
+    if (selectedStageUnitIds.length === 0) {
+      alert("Please select at least one stage unit.");
+      return;
+    }
+
+    const studentIds = unitEnrollMode === 'all'
+      ? unitEnrollCandidateStudents.map(student => student.id)
+      : unitEnrollSelectedStudents;
+
+    if (studentIds.length === 0) {
+      alert(unitEnrollMode === 'all'
+        ? "No matching active students are available for this batch and section."
+        : "Please select at least one student.");
+      return;
+    }
+
+    const moduleIds = await ensureSelectedStageUnitModules();
+    await Promise.all(moduleIds.map(moduleId => dbService.bulkEnroll(studentIds, moduleId)));
+
+    alert(`Enrolled ${studentIds.length} student(s) into ${moduleIds.length} selected unit(s).`);
+    setUnitEnrollSelectedStudents([]);
+    await loadAllAdminData();
   };
 
   const handleRegisterAllForManagedModule = async () => {
@@ -671,7 +826,7 @@ const AdminDashboard = () => {
       'A'
     );
 
-    alert("New academic module created successfully. Select it from the registration dropdown to register students.");
+    alert("New academic module created successfully. It is now available in the configured modules ledger.");
     const createdModuleId = newModId;
     setNewModId('');
     setNewModTitle('');
@@ -694,6 +849,11 @@ const AdminDashboard = () => {
   const selectedModBatchObj = batches.find(b => b && b.id === newModBatch);
   const allowedModSections = selectedModBatchObj?.sections ? selectedModBatchObj.sections.split(',') : ['A', 'B'];
 
+  const selectedUnitEnrollBatchObj = batches.find(b => b && b.id === unitEnrollBatch);
+  const allowedUnitEnrollSections = selectedUnitEnrollBatchObj?.sections
+    ? selectedUnitEnrollBatchObj.sections.split(',').map(s => s.trim())
+    : ['A', 'B'];
+
   const selectedEditBatchObj = batches.find(b => b && b.id === editBatch);
   const allowedEditSections = typeof selectedEditBatchObj?.sections === 'string' ? selectedEditBatchObj.sections.split(',').map(s => s.trim()) : ['A', 'B'];
 
@@ -715,6 +875,22 @@ const AdminDashboard = () => {
     : [];
   const managedModuleAvailableStudents = managedModuleCandidateStudents
     .filter(s => !managedRosterIds.includes(s.id));
+
+  const selectedStageUnits = (STAGE_UNIT_TEMPLATES[unitEnrollStage] || []).slice(0, 6);
+  const unitEnrollCandidateStudents = students
+    .filter(s => s.status === 'Active')
+    .filter(s => s.program_id === unitEnrollProgram)
+    .filter(s => s.stage === parseInt(unitEnrollStage))
+    .filter(s => s.batch_id === unitEnrollBatch)
+    .filter(s => s.section === unitEnrollSection)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const selectedStageUnitModuleIds = selectedStageUnits
+    .filter(unit => selectedStageUnitIds.includes(unit.id))
+    .map(unit => buildStageUnitModuleId(unitEnrollProgram, unitEnrollStage, unit.id, unitEnrollBatch, unitEnrollSection));
+  const selectedStageUnitRegisteredTotal = selectedStageUnitModuleIds.reduce(
+    (total, moduleId) => total + (moduleEnrollmentCounts[moduleId] || 0),
+    0
+  );
 
   // Filter Directory Table
   const filteredStudents = students.filter(s => {
@@ -1515,41 +1691,30 @@ const AdminDashboard = () => {
 
                   <div className="module-builder-panel">
                     <div className="module-panel-heading">
-                      <h4>Register Students For Module</h4>
-                      <span>Choose a module from the dropdown, then register a section or selected students</span>
+                      <h4>Enroll Students To Stage Units</h4>
+                      <span>Select up to six units for a stage, then enroll a batch section or custom students</span>
                     </div>
-
-                  <div className="form-group">
-                    <label>Select Module</label>
-                    <select className="form-select" value={managedModuleId} onChange={(e) => setManagedModuleId(e.target.value)}>
-                      <option value="">-- Select Module --</option>
-                      {modules
-                        .sort((a, b) => a.id.localeCompare(b.id))
-                        .map(mod => (
-                          <option key={mod.id} value={mod.id}>{mod.id} - {mod.title}</option>
-                        ))}
-                    </select>
-                  </div>
-
-                    {managedModule && (
-                      <div className="module-context-strip">
-                        <span>{managedModule.program_id}</span>
-                        <span>Stage {managedModule.stage}</span>
-                        </div>
-                      )}
 
                     <div className="module-builder-grid">
                       <div className="form-group">
-                        <label>Trimester</label>
-                        <select className="form-select" value={newModTri} onChange={(e) => setNewModTri(e.target.value)}>
-                          <option value="1">Trimester 1</option>
-                          <option value="2">Trimester 2</option>
-                          <option value="3">Trimester 3</option>
+                        <label>Program</label>
+                        <select className="form-select" value={unitEnrollProgram} onChange={(e) => setUnitEnrollProgram(e.target.value)}>
+                          {programs.map(p => (
+                            <option key={p.id} value={p.id}>{p.title}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Stage</label>
+                        <select className="form-select" value={unitEnrollStage} onChange={(e) => setUnitEnrollStage(e.target.value)}>
+                          <option value="1">Stage 1</option>
+                          <option value="2">Stage 2</option>
+                          <option value="3">Stage 3</option>
                         </select>
                       </div>
                       <div className="form-group">
                         <label>Intake Batch</label>
-                        <select className="form-select" value={newModBatch} onChange={(e) => setNewModBatch(e.target.value)}>
+                        <select className="form-select" value={unitEnrollBatch} onChange={(e) => setUnitEnrollBatch(e.target.value)}>
                           {batches.map(b => (
                             <option key={b.id} value={b.id}>{b.title}</option>
                           ))}
@@ -1557,63 +1722,111 @@ const AdminDashboard = () => {
                       </div>
                       <div className="form-group">
                         <label>Section</label>
-                        <select className="form-select" value={newModSection} onChange={(e) => setNewModSection(e.target.value)}>
-                          {allowedModSections.map(sec => (
+                        <select className="form-select" value={unitEnrollSection} onChange={(e) => setUnitEnrollSection(e.target.value)}>
+                          {allowedUnitEnrollSections.map(sec => (
                             <option key={sec} value={sec}>Section {sec}</option>
                           ))}
                         </select>
                       </div>
                       <div className="form-group">
                         <label>Tutor Name</label>
-                        <input type="text" className="form-input" placeholder="e.g. Dr. Susan Mahato" value={newModTutor} onChange={(e) => setNewModTutor(e.target.value)} />
+                        <input type="text" className="form-input" placeholder="e.g. Dr. Susan Mahato" value={unitEnrollTutor} onChange={(e) => setUnitEnrollTutor(e.target.value)} />
                       </div>
                     </div>
 
-                      <div className="form-group">
-                      <label>Registration Type</label>
-                      <div className="module-registration-toggle">
-                        <button type="button" className={newModRegistrationMode === 'all' ? 'active' : ''} onClick={() => setNewModRegistrationMode('all')}>
-                          Full section cohort
-                        </button>
-                        <button type="button" className={newModRegistrationMode === 'custom' ? 'active' : ''} onClick={() => setNewModRegistrationMode('custom')}>
-                          Custom students
-                        </button>
-                      </div>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBlockStart: '0.4rem' }}>
-                        Matching section cohort: {managedModuleCandidateStudents.length} active student(s).
-                      </p>
-                    </div>
-
-                    {newModRegistrationMode === 'custom' && (
-                      <div className="form-group">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
-                          <label style={{ margin: 0 }}>Select Students For This Module</label>
+                    <div className="form-group">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        <label style={{ margin: 0 }}>Stage {unitEnrollStage} Units</label>
+                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                           <button
                             type="button"
                             className="btn"
                             style={{ minHeight: '30px', padding: '0.25rem 0.7rem', fontSize: '0.75rem', width: 'auto' }}
-                            onClick={() => setNewModSelectedStudents(managedModuleAvailableStudents.map(s => s.id))}
-                            disabled={managedModuleAvailableStudents.length === 0}
+                            onClick={() => setSelectedStageUnitIds(selectedStageUnits.map(unit => unit.id))}
                           >
-                            Select All Available
+                            Select All
+                          </button>
+                          <button
+                            type="button"
+                            className="btn"
+                            style={{ minHeight: '30px', padding: '0.25rem 0.7rem', fontSize: '0.75rem', width: 'auto' }}
+                            onClick={() => setSelectedStageUnitIds([])}
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                      <div className="stage-unit-grid">
+                        {selectedStageUnits.map(unit => (
+                          <label key={unit.id} className="stage-unit-option">
+                            <input
+                              type="checkbox"
+                              checked={selectedStageUnitIds.includes(unit.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedStageUnitIds([...selectedStageUnitIds, unit.id]);
+                                } else {
+                                  setSelectedStageUnitIds(selectedStageUnitIds.filter(id => id !== unit.id));
+                                }
+                              }}
+                            />
+                            <span>
+                              <strong>{unit.title}</strong>
+                              <small>Trimester {unit.trimester}</small>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBlockStart: '0.4rem' }}>
+                        {selectedStageUnitIds.length} of {selectedStageUnits.length} stage units selected. Current registrations across selected units: {selectedStageUnitRegisteredTotal}.
+                      </p>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Registration Type</label>
+                      <div className="module-registration-toggle">
+                        <button type="button" className={unitEnrollMode === 'all' ? 'active' : ''} onClick={() => setUnitEnrollMode('all')}>
+                          Full section cohort
+                        </button>
+                        <button type="button" className={unitEnrollMode === 'custom' ? 'active' : ''} onClick={() => setUnitEnrollMode('custom')}>
+                          Custom students
+                        </button>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBlockStart: '0.4rem' }}>
+                        Matching section cohort: {unitEnrollCandidateStudents.length} active student(s).
+                      </p>
+                    </div>
+
+                    {unitEnrollMode === 'custom' && (
+                      <div className="form-group">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
+                          <label style={{ margin: 0 }}>Select Students For These Units</label>
+                          <button
+                            type="button"
+                            className="btn"
+                            style={{ minHeight: '30px', padding: '0.25rem 0.7rem', fontSize: '0.75rem', width: 'auto' }}
+                            onClick={() => setUnitEnrollSelectedStudents(unitEnrollCandidateStudents.map(s => s.id))}
+                            disabled={unitEnrollCandidateStudents.length === 0}
+                          >
+                            Select All
                           </button>
                         </div>
                         <div className="module-registration-list">
-                          {managedModuleAvailableStudents.length === 0 ? (
+                          {unitEnrollCandidateStudents.length === 0 ? (
                             <div style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
-                              No unregistered students are available in this module section.
+                              No active students match this program, stage, batch, and section.
                             </div>
                           ) : (
-                            managedModuleAvailableStudents.map(student => (
+                            unitEnrollCandidateStudents.map(student => (
                               <label key={student.id} className="module-registration-student">
                                 <input
                                   type="checkbox"
-                                  checked={newModSelectedStudents.includes(student.id)}
+                                  checked={unitEnrollSelectedStudents.includes(student.id)}
                                   onChange={(e) => {
                                     if (e.target.checked) {
-                                      setNewModSelectedStudents([...newModSelectedStudents, student.id]);
+                                      setUnitEnrollSelectedStudents([...unitEnrollSelectedStudents, student.id]);
                                     } else {
-                                      setNewModSelectedStudents(newModSelectedStudents.filter(id => id !== student.id));
+                                      setUnitEnrollSelectedStudents(unitEnrollSelectedStudents.filter(id => id !== student.id));
                                     }
                                   }}
                                 />
@@ -1628,47 +1841,15 @@ const AdminDashboard = () => {
                       </div>
                     )}
 
-                    <div className="module-roster-actions">
-                      <select className="form-select" value={managedAddStudentId} onChange={(e) => setManagedAddStudentId(e.target.value)} disabled={!managedModuleId || managedModuleAvailableStudents.length === 0}>
-                      <option value="">-- Add student from this section --</option>
-                      {managedModuleAvailableStudents.map(student => (
-                        <option key={student.id} value={student.id}>{student.name}</option>
-                      ))}
-                    </select>
-                    <button type="button" className="btn success" onClick={handleAddManagedStudent} disabled={!managedAddStudentId}>
-                      Add
+                    <button
+                      type="button"
+                      className="btn primary"
+                      style={{ justifyContent: 'center' }}
+                      onClick={handleEnrollStageUnits}
+                      disabled={selectedStageUnitIds.length === 0 || (unitEnrollMode === 'custom' && unitEnrollSelectedStudents.length === 0)}
+                    >
+                      Enroll Students To Selected Units
                     </button>
-                  </div>
-
-                    <button type="button" className="btn" style={{ justifyContent: 'center' }} onClick={handleRegisterAllForManagedModule} disabled={!managedModuleId}>
-                      Register Full Section Cohort
-                    </button>
-
-                    {newModRegistrationMode === 'custom' && (
-                      <button type="button" className="btn primary" style={{ justifyContent: 'center', marginBlockStart: '0.5rem' }} onClick={handleRegisterCustomForManagedModule} disabled={!managedModuleId || newModSelectedStudents.length === 0}>
-                        Register Selected Students
-                      </button>
-                    )}
-
-                  <div className="module-roster-list">
-                    {managedModuleStudents.length === 0 ? (
-                      <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                        No students are currently registered for this module.
-                      </div>
-                    ) : (
-                      managedModuleStudents.map(student => (
-                        <div key={student.id} className="module-roster-row">
-                          <div>
-                            <strong>{student.name}</strong>
-                            <span>{student.email}</span>
-                          </div>
-                          <button type="button" className="btn" onClick={() => handleRemoveManagedStudent(student.id)}>
-                            Remove
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
                 </div>
               </div>
 

@@ -945,6 +945,51 @@ header {
   text-overflow: ellipsis;
 }
 
+.stage-unit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-block-start: 0.5rem;
+}
+
+.stage-unit-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-width: 0;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  padding: 0.65rem;
+  cursor: pointer;
+}
+
+.stage-unit-option input {
+  width: 18px;
+  height: 18px;
+  margin-block-start: 0.1rem;
+  accent-color: var(--brand-blue);
+  flex: 0 0 auto;
+}
+
+.stage-unit-option span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.stage-unit-option strong {
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  line-height: 1.25;
+}
+
+.stage-unit-option small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
 .module-admin-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
@@ -1145,7 +1190,8 @@ header {
 
 @media (max-width: 640px) {
   .module-builder-grid,
-  .module-roster-actions {
+  .module-roster-actions,
+  .stage-unit-grid {
     grid-template-columns: 1fr;
   }
 }
