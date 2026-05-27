@@ -172,7 +172,7 @@ export const dbService = {
         .insert([{ id, name, email, program_id: programId, batch_id: batchId, stage: parseInt(stage), trimester: parseInt(trimester), section, status: 'Active' }]);
       
       if (!error) {
-        const modules = await this.getModules(programId, stage, trimester);
+        const modules = await this.getModules(programId, stage, trimester, section, batchId);
         const enrollmentsToInsert = modules.map(m => ({
           student_id: id,
           module_id: m.id,
@@ -230,7 +230,13 @@ export const dbService = {
             .single();
           
           if (updatedStudent) {
-            const modules = await this.getModules(updatedStudent.program_id, updatedStudent.stage, updatedStudent.trimester);
+            const modules = await this.getModules(
+              updatedStudent.program_id,
+              updatedStudent.stage,
+              updatedStudent.trimester,
+              updatedStudent.section,
+              updatedStudent.batch_id
+            );
             const enrollmentsToInsert = modules.map(m => ({
               student_id: id,
               module_id: m.id,

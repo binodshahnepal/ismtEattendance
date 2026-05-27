@@ -177,7 +177,13 @@ class MockDatabaseClass {
 
   enrollStudentInDefaultModules(student) {
     Object.values(this.data.modules).forEach(mod => {
-      if (mod.program_id === student.program_id && mod.stage === student.stage && mod.trimester === student.trimester) {
+      if (
+        mod.program_id === student.program_id &&
+        mod.stage === student.stage &&
+        mod.trimester === student.trimester &&
+        mod.batch_id === student.batch_id &&
+        mod.section === student.section
+      ) {
         this.data.enrollments.push({
           id: `enr_${student.id}_${mod.id}`,
           student_id: student.id,
