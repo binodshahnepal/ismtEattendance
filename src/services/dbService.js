@@ -99,6 +99,32 @@ export const dbService = {
     return MockDatabase.addModule(id, title, programId, stage, trimester, tutor, batchId, section);
   },
 
+  async updateModule(id, moduleData) {
+    if (isCloudActive()) {
+      const payload = {
+        title: moduleData.title,
+        program_id: moduleData.program_id,
+        stage: moduleData.stage !== undefined ? parseInt(moduleData.stage) : undefined,
+        trimester: moduleData.trimester !== undefined ? parseInt(moduleData.trimester) : undefined,
+        tutor: moduleData.tutor,
+        batch_id: moduleData.batch_id,
+        section: moduleData.section
+      };
+
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+      const { error } = await supabase
+        .from('modules')
+        .update(payload)
+        .eq('id', id);
+
+      if (!error) return true;
+      console.error("Supabase updateModule error:", error);
+    }
+
+    return MockDatabase.updateModule(id, moduleData);
+  },
+
   async bulkEnroll(studentIds, moduleId) {
     if (!Array.isArray(studentIds) || studentIds.length === 0) return true;
 

@@ -109,8 +109,18 @@ const AdminDashboard = () => {
   }, [modules, managedModuleId]);
 
   useEffect(() => {
+    const mod = modules.find(m => m.id === managedModuleId);
+    if (!mod) return;
+
+    setNewModTri(String(mod.trimester || '1'));
+    setNewModBatch(mod.batch_id || batches[0]?.id || 'jan_2026');
+    setNewModSection(mod.section || 'A');
+    setNewModTutor(mod.tutor && mod.tutor !== 'Unassigned' ? mod.tutor : '');
+  }, [managedModuleId, modules, batches]);
+
+  useEffect(() => {
     loadManagedModuleRoster();
-  }, [managedModuleId, modules]);
+  }, [managedModuleId, modules, newModSection]);
 
   // Update student registration section when selected batch changes
   useEffect(() => {
@@ -140,17 +150,23 @@ const AdminDashboard = () => {
   }, [editBatch, batches, editSection, editingStudent]);
 
   useEffect(() => {
+    const mod = modules.find(m => m.id === managedModuleId);
+    if (!mod) {
+      setNewModSelectedStudents([]);
+      return;
+    }
+
     const eligibleIds = students
       .filter(s => s.status === 'Active')
-      .filter(s => s.program_id === newModProg)
-      .filter(s => s.stage === parseInt(newModStage))
+      .filter(s => s.program_id === mod.program_id)
+      .filter(s => s.stage === parseInt(mod.stage))
       .filter(s => s.trimester === parseInt(newModTri))
       .filter(s => s.batch_id === newModBatch)
       .filter(s => s.section === newModSection)
       .map(s => s.id);
 
     setNewModSelectedStudents(prev => prev.filter(id => eligibleIds.includes(id)));
-  }, [students, newModProg, newModStage, newModTri, newModBatch, newModSection]);
+  }, [students, modules, managedModuleId, newModTri, newModBatch, newModSection]);
 
   const loadAllAdminData = async () => {
     const bts = await dbService.getBatches();
@@ -285,8 +301,7 @@ const AdminDashboard = () => {
       return;
     }
 
-    const selectedModule = modules.find(m => m.id === managedModuleId);
-    const roster = await dbService.getEnrolledStudents(managedModuleId, selectedModule?.section || null);
+    const roster = await dbService.getEnrolledStudents(managedModuleId, newModSection || null);
     const sortedRoster = roster.sort((a, b) => a.name.localeCompare(b.name));
     setManagedModuleStudents(sortedRoster);
     setNewModSelectedStudents([]);
@@ -306,8 +321,27 @@ const AdminDashboard = () => {
     }
   };
 
+  const saveManagedModuleRegistrationContext = async () => {
+    if (!managedModuleId || !newModTutor.trim()) {
+      alert("Please select a module and enter the tutor name for this registration.");
+      return false;
+    }
+
+    await dbService.updateModule(managedModuleId, {
+      trimester: newModTri,
+      batch_id: newModBatch,
+      section: newModSection,
+      tutor: newModTutor.trim()
+    });
+
+    return true;
+  };
+
   const handleRegisterAllForManagedModule = async () => {
     if (!managedModuleId) return;
+    const saved = await saveManagedModuleRegistrationContext();
+    if (!saved) return;
+
     const ids = managedModuleCandidateStudents.map(s => s.id);
     if (ids.length === 0) {
       alert("No matching active students are available for this module section.");
@@ -322,6 +356,9 @@ const AdminDashboard = () => {
 
   const handleRegisterCustomForManagedModule = async () => {
     if (!managedModuleId) return;
+    const saved = await saveManagedModuleRegistrationContext();
+    if (!saved) return;
+
     if (newModSelectedStudents.length === 0) {
       alert("Please select at least one student to register for this module.");
       return;
@@ -337,6 +374,9 @@ const AdminDashboard = () => {
 
   const handleAddManagedStudent = async () => {
     if (!managedModuleId || !managedAddStudentId) return;
+    const saved = await saveManagedModuleRegistrationContext();
+    if (!saved) return;
+
     await dbService.manualEnroll(managedAddStudentId, managedModuleId);
     setManagedAddStudentId('');
     await loadAllAdminData();
@@ -593,20 +633,22 @@ const AdminDashboard = () => {
   };
 
   const handleAddModule = async () => {
-    if (!newModId || !newModTitle || !newModTutor || !newModBatch || !newModSection) {
-      alert("Please fill in code, title, tutor, batch, and section details.");
+    if (!newModId || !newModTitle || !newModProg || !newModStage) {
+      alert("Please fill in module code, title, program, and stage.");
       return;
     }
+
+    const defaultBatchId = batches[0]?.id || 'jan_2026';
 
     await dbService.addModule(
       newModId,
       newModTitle,
       newModProg,
       newModStage,
-      newModTri,
-      newModTutor,
-      newModBatch,
-      newModSection
+      1,
+      'Unassigned',
+      defaultBatchId,
+      'A'
     );
 
     alert("New academic module created successfully. Select it from the registration dropdown to register students.");
@@ -646,9 +688,9 @@ const AdminDashboard = () => {
         .filter(s => s.status === 'Active')
         .filter(s => s.program_id === managedModule.program_id)
         .filter(s => s.stage === parseInt(managedModule.stage))
-        .filter(s => s.trimester === parseInt(managedModule.trimester))
-        .filter(s => s.batch_id === managedModule.batch_id)
-        .filter(s => s.section === managedModule.section)
+        .filter(s => s.trimester === parseInt(newModTri))
+        .filter(s => s.batch_id === newModBatch)
+        .filter(s => s.section === newModSection)
         .sort((a, b) => a.name.localeCompare(b.name))
     : [];
   const managedModuleAvailableStudents = managedModuleCandidateStudents
@@ -1379,10 +1421,10 @@ const AdminDashboard = () => {
 
               <div className="module-admin-workspace">
 	                <div className="module-builder-panel">
-	                  <div className="module-panel-heading">
-	                    <h4>Create Module</h4>
-	                    <span>Add modules first for every program stage and section</span>
-	                  </div>
+		                  <div className="module-panel-heading">
+		                    <h4>Create Module</h4>
+		                    <span>Add the academic module first for a program stage</span>
+		                  </div>
 
                   <div className="module-builder-grid">
                     <div className="form-group">
@@ -1401,43 +1443,15 @@ const AdminDashboard = () => {
                         ))}
                       </select>
                     </div>
-                    <div className="form-group">
-                      <label>Tutor Name</label>
-                      <input type="text" className="form-input" placeholder="e.g. Dr. Susan Mahato" value={newModTutor} onChange={(e) => setNewModTutor(e.target.value)} />
-                    </div>
-                    <div className="form-group">
-                      <label>Stage</label>
-                      <select className="form-select" value={newModStage} onChange={(e) => setNewModStage(e.target.value)}>
+	                    <div className="form-group">
+	                      <label>Stage</label>
+	                      <select className="form-select" value={newModStage} onChange={(e) => setNewModStage(e.target.value)}>
                         <option value="1">Stage 1</option>
                         <option value="2">Stage 2</option>
                         <option value="3">Stage 3</option>
                       </select>
                     </div>
-                    <div className="form-group">
-                      <label>Trimester</label>
-                      <select className="form-select" value={newModTri} onChange={(e) => setNewModTri(e.target.value)}>
-                        <option value="1">Trimester 1</option>
-                        <option value="2">Trimester 2</option>
-                        <option value="3">Trimester 3</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Intake Batch</label>
-                      <select className="form-select" value={newModBatch} onChange={(e) => setNewModBatch(e.target.value)}>
-                        {batches.map(b => (
-                          <option key={b.id} value={b.id}>{b.title}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Section</label>
-                      <select className="form-select" value={newModSection} onChange={(e) => setNewModSection(e.target.value)}>
-                        {allowedModSections.map(sec => (
-                          <option key={sec} value={sec}>Section {sec}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+	                  </div>
 
 	                  <button type="button" className="btn primary" style={{ justifyContent: 'center' }} onClick={handleAddModule}>
 	                    Create Module
@@ -1462,17 +1476,45 @@ const AdminDashboard = () => {
                     </select>
                   </div>
 
-                  {managedModule && (
-                    <div className="module-context-strip">
-                      <span>{managedModule.program_id}</span>
-                      <span>Stage {managedModule.stage}</span>
-                      <span>Tri {managedModule.trimester}</span>
-                      <span>Sec {managedModule.section}</span>
-                      <span>{managedModule.tutor}</span>
-	                    </div>
-	                  )}
+	                  {managedModule && (
+	                    <div className="module-context-strip">
+	                      <span>{managedModule.program_id}</span>
+	                      <span>Stage {managedModule.stage}</span>
+		                    </div>
+		                  )}
 
-	                  <div className="form-group">
+	                  <div className="module-builder-grid">
+	                    <div className="form-group">
+	                      <label>Trimester</label>
+	                      <select className="form-select" value={newModTri} onChange={(e) => setNewModTri(e.target.value)}>
+	                        <option value="1">Trimester 1</option>
+	                        <option value="2">Trimester 2</option>
+	                        <option value="3">Trimester 3</option>
+	                      </select>
+	                    </div>
+	                    <div className="form-group">
+	                      <label>Intake Batch</label>
+	                      <select className="form-select" value={newModBatch} onChange={(e) => setNewModBatch(e.target.value)}>
+	                        {batches.map(b => (
+	                          <option key={b.id} value={b.id}>{b.title}</option>
+	                        ))}
+	                      </select>
+	                    </div>
+	                    <div className="form-group">
+	                      <label>Section</label>
+	                      <select className="form-select" value={newModSection} onChange={(e) => setNewModSection(e.target.value)}>
+	                        {allowedModSections.map(sec => (
+	                          <option key={sec} value={sec}>Section {sec}</option>
+	                        ))}
+	                      </select>
+	                    </div>
+	                    <div className="form-group">
+	                      <label>Tutor Name</label>
+	                      <input type="text" className="form-input" placeholder="e.g. Dr. Susan Mahato" value={newModTutor} onChange={(e) => setNewModTutor(e.target.value)} />
+	                    </div>
+	                  </div>
+
+		                  <div className="form-group">
 	                    <label>Registration Type</label>
 	                    <div className="module-registration-toggle">
 	                      <button type="button" className={newModRegistrationMode === 'all' ? 'active' : ''} onClick={() => setNewModRegistrationMode('all')}>
@@ -1912,7 +1954,7 @@ const AdminDashboard = () => {
                 ))}
               </select>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem' }}>
               <div className="form-group">
                 <label>Stage</label>
                 <select className="form-select" value={newModStage} onChange={(e) => setNewModStage(e.target.value)}>
@@ -1921,37 +1963,6 @@ const AdminDashboard = () => {
                   <option value="3">Stage 3</option>
                 </select>
               </div>
-              <div className="form-group">
-                <label>Trimester</label>
-                <select className="form-select" value={newModTri} onChange={(e) => setNewModTri(e.target.value)}>
-                  <option value="1">Trimester 1</option>
-                  <option value="2">Trimester 2</option>
-                  <option value="3">Trimester 3</option>
-                </select>
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-              <div className="form-group">
-                <label>Intake Batch</label>
-                <select className="form-select" value={newModBatch} onChange={(e) => setNewModBatch(e.target.value)} style={{ width: '100%' }}>
-                  {batches.map(b => (
-                    <option key={b.id} value={b.id}>{b.title}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Allocated Section</label>
-                <select className="form-select" value={newModSection} onChange={(e) => setNewModSection(e.target.value)} style={{ width: '100%' }}>
-                  {allowedModSections.map(sec => (
-                    <option key={sec} value={sec}>Sec {sec}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Assigned Tutor</label>
-              <input type="text" className="form-input" placeholder="e.g. Dr. Susan Mahato" value={newModTutor} onChange={(e) => setNewModTutor(e.target.value)} />
             </div>
 
             <button className="btn primary" style={{ width: '100%', justifyContent: 'center', marginBlockStart: '1rem', background: 'var(--brand-orange)' }} onClick={handleAddModule}>

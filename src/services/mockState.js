@@ -535,6 +535,22 @@ class MockDatabaseClass {
     return true;
   }
 
+  updateModule(id, moduleData) {
+    const mod = this.data.modules[id];
+    if (!mod) return false;
+
+    if (moduleData.title !== undefined) mod.title = moduleData.title;
+    if (moduleData.program_id !== undefined) mod.program_id = moduleData.program_id;
+    if (moduleData.stage !== undefined) mod.stage = parseInt(moduleData.stage);
+    if (moduleData.trimester !== undefined) mod.trimester = parseInt(moduleData.trimester);
+    if (moduleData.tutor !== undefined) mod.tutor = moduleData.tutor;
+    if (moduleData.batch_id !== undefined) mod.batch_id = moduleData.batch_id;
+    if (moduleData.section !== undefined) mod.section = moduleData.section;
+
+    this.save();
+    return true;
+  }
+
   bulkEnroll(studentIds, moduleId) {
     const mod = this.data.modules[moduleId];
     if (!mod || !Array.isArray(studentIds)) return false;
