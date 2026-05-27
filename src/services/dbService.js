@@ -188,14 +188,30 @@ export const dbService = {
     return MockDatabase.fetchEnrolledStudents(moduleId, section);
   },
 
-  async addStudent(name, programId, stage, trimester, section = 'A', batchId = 'jan_2026') {
+  async addStudent(name, programId, stage, trimester, section = 'A', batchId = 'jan_2026', studentDetails = {}) {
+    const collegeEmail = studentDetails.college_email || name.toLowerCase().replace(/\s+/g, '.') + '@ismt.edu.np';
+    const studentPayload = {
+      name,
+      email: collegeEmail,
+      contact_number: studentDetails.contact_number || null,
+      personal_email: studentDetails.personal_email || null,
+      parent_name: studentDetails.parent_name || null,
+      parent_contact_number: studentDetails.parent_contact_number || null,
+      student_code: studentDetails.student_code || null,
+      program_id: programId,
+      batch_id: batchId,
+      stage: parseInt(stage),
+      trimester: parseInt(trimester),
+      section,
+      status: 'Active'
+    };
+
     if (isCloudActive()) {
       const id = `std_${Date.now()}`;
-      const email = name.toLowerCase().replace(/\s+/g, '.') + '@ismt.edu.np';
       
       const { error } = await supabase
         .from('students')
-        .insert([{ id, name, email, program_id: programId, batch_id: batchId, stage: parseInt(stage), trimester: parseInt(trimester), section, status: 'Active' }]);
+        .insert([{ id, ...studentPayload }]);
       
       if (!error) {
         const modules = await this.getModules(programId, stage, trimester, section, batchId);
@@ -207,11 +223,11 @@ export const dbService = {
         if (enrollmentsToInsert.length > 0) {
           await supabase.from('enrollments').insert(enrollmentsToInsert);
         }
-        return { id, name, email, program_id: programId, batch_id: batchId, stage, trimester, section, status: 'Active' };
+        return { id, ...studentPayload };
       }
       console.error("Supabase addStudent error:", error);
     }
-    return MockDatabase.addStudent(name, programId, stage, trimester, section, batchId);
+    return MockDatabase.addStudent(name, programId, stage, trimester, section, batchId, studentDetails);
   },
 
   async updateStudent(id, studentData) {
@@ -222,6 +238,11 @@ export const dbService = {
       
       const payload = {
         name: studentData.name,
+        contact_number: studentData.contact_number,
+        personal_email: studentData.personal_email,
+        parent_name: studentData.parent_name,
+        parent_contact_number: studentData.parent_contact_number,
+        student_code: studentData.student_code,
         program_id: studentData.program_id,
         batch_id: studentData.batch_id,
         stage: studentData.stage ? parseInt(studentData.stage) : undefined,
@@ -232,7 +253,9 @@ export const dbService = {
       
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
       
-      if (payload.name) {
+      if (studentData.college_email) {
+        payload.email = studentData.college_email;
+      } else if (payload.name) {
         payload.email = studentData.name.toLowerCase().replace(/\s+/g, '.') + '@ismt.edu.np';
       }
 

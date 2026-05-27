@@ -29,6 +29,11 @@ CREATE TABLE IF NOT EXISTS students (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
+    contact_number VARCHAR(50),
+    personal_email VARCHAR(255),
+    parent_name VARCHAR(255),
+    parent_contact_number VARCHAR(50),
+    student_code VARCHAR(100),
     program_id VARCHAR(50) REFERENCES programs(id) ON DELETE RESTRICT,
     batch_id VARCHAR(50) REFERENCES batches(id) ON DELETE RESTRICT,
     stage INT NOT NULL CHECK (stage BETWEEN 1 AND 3),
@@ -37,6 +42,13 @@ CREATE TABLE IF NOT EXISTS students (
     status VARCHAR(50) NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Inactive', 'Graduated')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Existing Supabase databases created before this update need these nullable student profile fields too.
+ALTER TABLE students ADD COLUMN IF NOT EXISTS contact_number VARCHAR(50);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS personal_email VARCHAR(255);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_name VARCHAR(255);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_contact_number VARCHAR(50);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS student_code VARCHAR(100);
 
 -- 4. MODULES
 CREATE TABLE IF NOT EXISTS modules (
@@ -102,6 +114,7 @@ CREATE TABLE IF NOT EXISTS migration_logs (
 -- =======================================================
 CREATE INDEX IF NOT EXISTS idx_students_cohort ON students (program_id, stage, trimester, section);
 CREATE INDEX IF NOT EXISTS idx_students_batch ON students (batch_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_students_student_code_unique ON students (student_code) WHERE student_code IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_modules_trimester ON modules (program_id, stage, trimester);
 CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance (record_date);
 CREATE INDEX IF NOT EXISTS idx_leaves_student ON leave_applications (student_id);

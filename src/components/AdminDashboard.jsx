@@ -1,6 +1,6 @@
 /**
  * AdminDashboard.jsx - Administrative Control Center (Batch-Aware)
- * 
+ *
  * Supports bulk trimester cohort migrations, manual student registrations,
  * leave audits and approvals, new program/module/intake creation modals, and directories.
  */
@@ -35,6 +35,12 @@ const AdminDashboard = () => {
 
   // Add Student states
   const [newStudentName, setNewStudentName] = useState('');
+  const [newStudentContact, setNewStudentContact] = useState('');
+  const [newStudentPersonalEmail, setNewStudentPersonalEmail] = useState('');
+  const [newStudentCollegeEmail, setNewStudentCollegeEmail] = useState('');
+  const [newStudentParentName, setNewStudentParentName] = useState('');
+  const [newStudentParentContact, setNewStudentParentContact] = useState('');
+  const [newStudentCode, setNewStudentCode] = useState('');
   const [newStudentProgram, setNewStudentProgram] = useState('bsc_cse');
   const [newStudentBatch, setNewStudentBatch] = useState('jan_2026');
   const [newStudentStage, setNewStudentStage] = useState('1');
@@ -419,7 +425,15 @@ const AdminDashboard = () => {
         newStudentStage,
         newStudentTri,
         newStudentSection,
-        newStudentBatch
+        newStudentBatch,
+        {
+          contact_number: newStudentContact,
+          personal_email: newStudentPersonalEmail,
+          college_email: newStudentCollegeEmail,
+          parent_name: newStudentParentName,
+          parent_contact_number: newStudentParentContact,
+          student_code: newStudentCode
+        }
       );
       Swal.fire({
         icon: 'success',
@@ -429,6 +443,12 @@ const AdminDashboard = () => {
         timer: 2000
       });
       setNewStudentName('');
+      setNewStudentContact('');
+      setNewStudentPersonalEmail('');
+      setNewStudentCollegeEmail('');
+      setNewStudentParentName('');
+      setNewStudentParentContact('');
+      setNewStudentCode('');
       loadAllAdminData();
     } catch (err) {
       console.error(err);
@@ -477,7 +497,7 @@ const AdminDashboard = () => {
 
     try {
       await dbService.updateStudent(editingStudent.id, payload);
-      
+
       Swal.fire({
         icon: 'success',
         title: 'Profile Updated',
@@ -485,7 +505,7 @@ const AdminDashboard = () => {
         confirmButtonColor: 'var(--brand-orange)',
         timer: 2000
       });
-      
+
       setIsEditOpen(false);
       setEditingStudent(null);
       loadAllAdminData();
@@ -575,7 +595,7 @@ const AdminDashboard = () => {
 
     const sectionName = prompt("Enter new section name (e.g. C, Morning, Evening, Section E):");
     if (sectionName === null) return; // User cancelled
-    
+
     const cleanedName = sectionName.trim();
     if (!cleanedName) {
       alert("Section name cannot be empty.");
@@ -670,7 +690,7 @@ const AdminDashboard = () => {
 
   const selectedBatchObj = batches.find(b => b && b.id === newStudentBatch);
   const allowedSections = selectedBatchObj?.sections ? selectedBatchObj.sections.split(',') : ['A', 'B'];
-  
+
   const selectedModBatchObj = batches.find(b => b && b.id === newModBatch);
   const allowedModSections = selectedModBatchObj?.sections ? selectedModBatchObj.sections.split(',') : ['A', 'B'];
 
@@ -767,11 +787,11 @@ const AdminDashboard = () => {
           </button>
         ))}
       </nav>
-      
+
       {/* SECTION 1: COHORT MIGRATIONS & MANUAL TRANSFERS */}
       {activeTab === 'operations' && (
       <div className="migration-grid">
-        
+
         {/* Left Card: Bulk Cohort Migration */}
         <div className="glass-card">
           <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBlockEnd: '1rem', color: 'var(--brand-blue)' }}>
@@ -780,10 +800,10 @@ const AdminDashboard = () => {
 
           <div className="filter-section">
             <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>1. Select Origin Cohort</label>
-            
-            <select 
-              className="form-select" 
-              value={migProgram} 
+
+            <select
+              className="form-select"
+              value={migProgram}
               onChange={(e) => setMigProgram(e.target.value)}
               style={{ width: '100%' }}
             >
@@ -846,10 +866,10 @@ const AdminDashboard = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBlockStart: '1rem', marginBlockEnd: '0.5rem' }}>
             <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>Active Origin Cohort</h4>
             <label className="checkbox-container" style={{ fontSize: '0.85rem', gap: '0.35rem' }}>
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={selectedMigStudents.length === migStudents.length && migStudents.length > 0}
-                onChange={handleSelectAllMigration} 
+                onChange={handleSelectAllMigration}
               /> Select All
             </label>
           </div>
@@ -863,7 +883,7 @@ const AdminDashboard = () => {
               migStudents.map(student => (
                 <div key={student.id} className="migration-student-item">
                   <label className="checkbox-container">
-                    <input 
+                    <input
                       type="checkbox"
                       checked={selectedMigStudents.includes(student.id)}
                       onChange={() => handleSelectStudentToggle(student.id)}
@@ -878,8 +898,8 @@ const AdminDashboard = () => {
             )}
           </div>
 
-          <button 
-            className="btn primary" 
+          <button
+            className="btn primary"
             style={{ width: '100%', justifyContent: 'center', marginBlockStart: '1.25rem', minHeight: '52px', background: 'var(--brand-orange)', boxShadow: '0 4px 12px var(--brand-orange-glow)' }}
             onClick={handleExecuteMigration}
           >
@@ -926,8 +946,8 @@ const AdminDashboard = () => {
                       <h5 style={{ fontSize: '0.8rem', fontWeight: 500 }}>{mod.title}</h5>
                       <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Tutor: {mod.tutor}</span>
                     </div>
-                    <button 
-                      className="btn" 
+                    <button
+                      className="btn"
                       style={{ minHeight: '26px', padding: '0.2rem 0.5rem', fontSize: '0.7rem', color: 'var(--accent-absent)', borderColor: 'rgba(239,68,68,0.15)' }}
                       onClick={() => handleRemoveManualEnrollment(mod.id)}
                     >
@@ -951,8 +971,8 @@ const AdminDashboard = () => {
                   )}
                 </select>
               </div>
-              <button 
-                className="btn success" 
+              <button
+                className="btn success"
                 style={{ width: '100%', minHeight: '38px' }}
                 onClick={handleAddManualEnrollment}
                 disabled={manualAvailableModules.length === 0}
@@ -1001,23 +1021,51 @@ const AdminDashboard = () => {
       {/* SECTION 3: ADD ENTITIES AND SUMMARY DIRECTORY */}
       {(activeTab === 'overview' || activeTab === 'setup') && (
       <div className="admin-grid">
-        
+
         {/* Left: Quick Setup additions */}
         <div className="glass-card">
           <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBlockEnd: '1rem', color: 'var(--brand-blue)' }}>Quick Setup Panel</h3>
-          
+
           <form onSubmit={handleAddStudent} style={{ marginBlockEnd: '1.5rem', borderBlockEnd: '1px solid var(--border-glass)', paddingBlockEnd: '1.5rem' }}>
-            <h4 style={{ fontSize: '0.95rem', fontWeight: 600, marginBlockEnd: '0.5rem' }}>Register New Student</h4>
-            
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 600, marginBlockEnd: '0.5rem' }}>Enroll New Student</h4>
+
             <div className="form-group" style={{ marginBlockEnd: '0.75rem' }}>
-              <input 
-                type="text" 
-                className="form-input" 
+              <label>Student Name <span style={{ color: 'var(--accent-absent)' }}>*</span></label>
+              <input
+                type="text"
+                className="form-input"
                 placeholder="e.g. Grishma Amatya"
                 value={newStudentName}
                 onChange={(e) => setNewStudentName(e.target.value)}
                 required
               />
+            </div>
+
+            <div className="student-enrollment-grid">
+              <div className="form-group">
+                <label>Student ID</label>
+                <input type="text" className="form-input" placeholder="e.g. ISMT-2026-001" value={newStudentCode} onChange={(e) => setNewStudentCode(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Contact Number</label>
+                <input type="tel" className="form-input" placeholder="Student phone" value={newStudentContact} onChange={(e) => setNewStudentContact(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Personal Email</label>
+                <input type="email" className="form-input" placeholder="personal@example.com" value={newStudentPersonalEmail} onChange={(e) => setNewStudentPersonalEmail(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>College Email</label>
+                <input type="email" className="form-input" placeholder="student@ismt.edu.np" value={newStudentCollegeEmail} onChange={(e) => setNewStudentCollegeEmail(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Parent Name</label>
+                <input type="text" className="form-input" placeholder="Parent or guardian" value={newStudentParentName} onChange={(e) => setNewStudentParentName(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Parent Contact Number</label>
+                <input type="tel" className="form-input" placeholder="Parent phone" value={newStudentParentContact} onChange={(e) => setNewStudentParentContact(e.target.value)} />
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBlockEnd: '0.75rem' }}>
@@ -1058,7 +1106,7 @@ const AdminDashboard = () => {
             </div>
 
             <button type="submit" className="btn primary" style={{ width: '100%', justifyContent: 'center' }}>
-              Create Student Account
+              Enroll Student
             </button>
           </form>
 
@@ -1089,37 +1137,37 @@ const AdminDashboard = () => {
                     <h5 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>{b.title}</h5>
                     <code style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>ID: {b.id}</code>
                   </div>
-                  <button 
-                    className="btn" 
+                  <button
+                    className="btn"
                     style={{ minHeight: '28px', padding: '0.2rem 0.6rem', fontSize: '0.7rem', color: 'var(--brand-orange)', borderColor: 'var(--border-glass)' }}
                     onClick={() => handleAddSectionToBatch(b.id)}
                   >
                     ➕ Sec
                   </button>
                 </div>
-                
+
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
                   {(b.sections || 'A,B').split(',').map(sec => (
-                    <span 
-                      key={sec} 
-                      style={{ 
-                        background: 'rgba(30, 64, 175, 0.05)', 
-                        border: '1px solid rgba(30, 64, 175, 0.1)', 
-                        color: 'var(--brand-blue)', 
-                        fontSize: '0.75rem', 
-                        padding: '0.2rem 0.45rem', 
-                        borderRadius: '6px', 
-                        fontWeight: 'bold', 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        gap: '0.25rem' 
+                    <span
+                      key={sec}
+                      style={{
+                        background: 'rgba(30, 64, 175, 0.05)',
+                        border: '1px solid rgba(30, 64, 175, 0.1)',
+                        color: 'var(--brand-blue)',
+                        fontSize: '0.75rem',
+                        padding: '0.2rem 0.45rem',
+                        borderRadius: '6px',
+                        fontWeight: 'bold',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem'
                       }}
                     >
                       Sec {sec}
-                      <span 
-                        style={{ 
-                          cursor: 'pointer', 
-                          color: 'var(--accent-absent)', 
+                      <span
+                        style={{
+                          cursor: 'pointer',
+                          color: 'var(--accent-absent)',
                           fontWeight: 'bold',
                           marginLeft: '0.15rem',
                           display: 'inline-flex',
@@ -1129,7 +1177,7 @@ const AdminDashboard = () => {
                           height: '12px',
                           borderRadius: '50%',
                           background: 'rgba(239, 68, 68, 0.08)'
-                        }} 
+                        }}
                         onClick={() => handleRemoveSectionFromBatch(b.id, sec)}
                         title={`Remove Section ${sec}`}
                       >✕</span>
@@ -1193,18 +1241,18 @@ const AdminDashboard = () => {
                         {s.status}
                       </div>
                       <div style={{ display: 'flex', gap: '0.25rem' }}>
-                        <button 
+                        <button
                           type="button"
-                          className="btn" 
+                          className="btn"
                           style={{ minHeight: '28px', padding: '0.2rem 0.4rem', fontSize: '0.75rem', borderColor: 'var(--border-glass)', cursor: 'pointer' }}
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleOpenEditModal(s); }}
                           title="Edit Student"
                         >
                           ✏️
                         </button>
-                        <button 
+                        <button
                           type="button"
-                          className="btn" 
+                          className="btn"
                           style={{ minHeight: '28px', padding: '0.2rem 0.4rem', fontSize: '0.75rem', color: 'var(--accent-absent)', borderColor: 'rgba(239,68,68,0.15)', cursor: 'pointer' }}
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteStudent(s.id, s.name); }}
                           title="Delete Student"
@@ -1226,7 +1274,7 @@ const AdminDashboard = () => {
       {/* SECTION 4: MASTER DIRECTORIES HUB */}
       {directoryTabs.includes(activeTab) && (
       <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBlockStart: '0.5rem' }}>
-        
+
         {/* Header & Tabs */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBlockEnd: '1px solid var(--border-glass)', paddingBlockEnd: '1.25rem' }}>
           <div>
@@ -1278,14 +1326,14 @@ const AdminDashboard = () => {
           {/* TAB 1: STUDENT MASTER ROSTER */}
           {activeTab === 'students' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              
+
               {/* Search & Filter Header */}
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  placeholder="🔍 Search student name or email..." 
-                  value={studentSearch} 
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Search student name, email, ID, or contact..."
+                  value={studentSearch}
                   onChange={(e) => setStudentSearch(e.target.value)}
                   style={{ flexGrow: 1, minWidth: '240px', minHeight: '40px' }}
                 />
@@ -1310,7 +1358,9 @@ const AdminDashboard = () => {
                       .filter(s => {
                         const nameMatch = s.name.toLowerCase().includes(studentSearch.toLowerCase());
                         const emailMatch = s.email.toLowerCase().includes(studentSearch.toLowerCase());
-                        return nameMatch || emailMatch;
+                        const codeMatch = (s.student_code || '').toLowerCase().includes(studentSearch.toLowerCase());
+                        const contactMatch = (s.contact_number || '').toLowerCase().includes(studentSearch.toLowerCase());
+                        return nameMatch || emailMatch || codeMatch || contactMatch;
                       })
                       .sort((a, b) => a.name.localeCompare(b.name))
                       .map(s => {
@@ -1340,18 +1390,23 @@ const AdminDashboard = () => {
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                   <strong style={{ color: 'var(--text-primary)', fontSize: '0.85rem' }}>{s.name}</strong>
                                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{s.email}</span>
+                                  {(s.student_code || s.contact_number) && (
+                                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                                      {s.student_code ? `ID: ${s.student_code}` : ''}{s.student_code && s.contact_number ? ' • ' : ''}{s.contact_number || ''}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </td>
                             <td style={{ padding: '0.85rem 1rem' }}>
-                              <span style={{ 
-                                background: 'rgba(30, 64, 175, 0.05)', 
-                                border: '1px solid rgba(30, 64, 175, 0.1)', 
-                                color: 'var(--brand-blue)', 
-                                padding: '0.2rem 0.5rem', 
-                                borderRadius: '6px', 
-                                fontSize: '0.75rem', 
-                                fontWeight: 500 
+                              <span style={{
+                                background: 'rgba(30, 64, 175, 0.05)',
+                                border: '1px solid rgba(30, 64, 175, 0.1)',
+                                color: 'var(--brand-blue)',
+                                padding: '0.2rem 0.5rem',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontWeight: 500
                               }}>
                                 {prog ? prog.title.substring(0, 25) + '...' : 'Unknown'}
                               </span>
@@ -1368,31 +1423,31 @@ const AdminDashboard = () => {
                               </span>
                             </td>
                             <td style={{ padding: '0.85rem 1rem' }}>
-                              <span style={{ 
-                                fontSize: '0.7rem', 
-                                fontWeight: 700, 
-                                color: s.status === 'Active' ? 'var(--accent-present)' : s.status === 'Graduated' ? 'var(--brand-blue)' : 'var(--accent-absent)', 
-                                background: 'rgba(15, 23, 42, 0.03)', 
-                                border: '1px solid var(--border-glass)', 
-                                borderRadius: '12px', 
-                                padding: '0.2rem 0.6rem' 
+                              <span style={{
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                color: s.status === 'Active' ? 'var(--accent-present)' : s.status === 'Graduated' ? 'var(--brand-blue)' : 'var(--accent-absent)',
+                                background: 'rgba(15, 23, 42, 0.03)',
+                                border: '1px solid var(--border-glass)',
+                                borderRadius: '12px',
+                                padding: '0.2rem 0.6rem'
                               }}>
                                 {s.status}
                               </span>
                             </td>
                             <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
                               <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'center' }}>
-                                <button 
-                                  type="button" 
-                                  className="btn" 
+                                <button
+                                  type="button"
+                                  className="btn"
                                   style={{ minHeight: '30px', padding: '0.25rem 0.5rem', fontSize: '0.75rem', borderColor: 'var(--border-glass)' }}
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleOpenEditModal(s); }}
                                 >
                                   ✏️ Edit
                                 </button>
-                                <button 
-                                  type="button" 
-                                  className="btn" 
+                                <button
+                                  type="button"
+                                  className="btn"
                                   style={{ minHeight: '30px', padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: 'var(--accent-absent)', borderColor: 'rgba(239, 68, 68, 0.15)' }}
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteStudent(s.id, s.name); }}
                                 >
@@ -1420,11 +1475,11 @@ const AdminDashboard = () => {
               </div>
 
               <div className="module-admin-workspace">
-	                <div className="module-builder-panel">
-		                  <div className="module-panel-heading">
-		                    <h4>Create Module</h4>
-		                    <span>Add the academic module first for a program stage</span>
-		                  </div>
+                  <div className="module-builder-panel">
+                      <div className="module-panel-heading">
+                        <h4>Create Module</h4>
+                        <span>Add the academic module first for a program stage</span>
+                      </div>
 
                   <div className="module-builder-grid">
                     <div className="form-group">
@@ -1443,26 +1498,26 @@ const AdminDashboard = () => {
                         ))}
                       </select>
                     </div>
-	                    <div className="form-group">
-	                      <label>Stage</label>
-	                      <select className="form-select" value={newModStage} onChange={(e) => setNewModStage(e.target.value)}>
+                      <div className="form-group">
+                        <label>Stage</label>
+                        <select className="form-select" value={newModStage} onChange={(e) => setNewModStage(e.target.value)}>
                         <option value="1">Stage 1</option>
                         <option value="2">Stage 2</option>
                         <option value="3">Stage 3</option>
                       </select>
                     </div>
-	                  </div>
+                    </div>
 
-	                  <button type="button" className="btn primary" style={{ justifyContent: 'center' }} onClick={handleAddModule}>
-	                    Create Module
-	                  </button>
-	                </div>
+                    <button type="button" className="btn primary" style={{ justifyContent: 'center' }} onClick={handleAddModule}>
+                      Create Module
+                    </button>
+                  </div>
 
-	                <div className="module-builder-panel">
-	                  <div className="module-panel-heading">
-	                    <h4>Register Students For Module</h4>
-	                    <span>Choose a module from the dropdown, then register a section or selected students</span>
-	                  </div>
+                  <div className="module-builder-panel">
+                    <div className="module-panel-heading">
+                      <h4>Register Students For Module</h4>
+                      <span>Choose a module from the dropdown, then register a section or selected students</span>
+                    </div>
 
                   <div className="form-group">
                     <label>Select Module</label>
@@ -1476,105 +1531,105 @@ const AdminDashboard = () => {
                     </select>
                   </div>
 
-	                  {managedModule && (
-	                    <div className="module-context-strip">
-	                      <span>{managedModule.program_id}</span>
-	                      <span>Stage {managedModule.stage}</span>
-		                    </div>
-		                  )}
+                    {managedModule && (
+                      <div className="module-context-strip">
+                        <span>{managedModule.program_id}</span>
+                        <span>Stage {managedModule.stage}</span>
+                        </div>
+                      )}
 
-	                  <div className="module-builder-grid">
-	                    <div className="form-group">
-	                      <label>Trimester</label>
-	                      <select className="form-select" value={newModTri} onChange={(e) => setNewModTri(e.target.value)}>
-	                        <option value="1">Trimester 1</option>
-	                        <option value="2">Trimester 2</option>
-	                        <option value="3">Trimester 3</option>
-	                      </select>
-	                    </div>
-	                    <div className="form-group">
-	                      <label>Intake Batch</label>
-	                      <select className="form-select" value={newModBatch} onChange={(e) => setNewModBatch(e.target.value)}>
-	                        {batches.map(b => (
-	                          <option key={b.id} value={b.id}>{b.title}</option>
-	                        ))}
-	                      </select>
-	                    </div>
-	                    <div className="form-group">
-	                      <label>Section</label>
-	                      <select className="form-select" value={newModSection} onChange={(e) => setNewModSection(e.target.value)}>
-	                        {allowedModSections.map(sec => (
-	                          <option key={sec} value={sec}>Section {sec}</option>
-	                        ))}
-	                      </select>
-	                    </div>
-	                    <div className="form-group">
-	                      <label>Tutor Name</label>
-	                      <input type="text" className="form-input" placeholder="e.g. Dr. Susan Mahato" value={newModTutor} onChange={(e) => setNewModTutor(e.target.value)} />
-	                    </div>
-	                  </div>
+                    <div className="module-builder-grid">
+                      <div className="form-group">
+                        <label>Trimester</label>
+                        <select className="form-select" value={newModTri} onChange={(e) => setNewModTri(e.target.value)}>
+                          <option value="1">Trimester 1</option>
+                          <option value="2">Trimester 2</option>
+                          <option value="3">Trimester 3</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Intake Batch</label>
+                        <select className="form-select" value={newModBatch} onChange={(e) => setNewModBatch(e.target.value)}>
+                          {batches.map(b => (
+                            <option key={b.id} value={b.id}>{b.title}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Section</label>
+                        <select className="form-select" value={newModSection} onChange={(e) => setNewModSection(e.target.value)}>
+                          {allowedModSections.map(sec => (
+                            <option key={sec} value={sec}>Section {sec}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Tutor Name</label>
+                        <input type="text" className="form-input" placeholder="e.g. Dr. Susan Mahato" value={newModTutor} onChange={(e) => setNewModTutor(e.target.value)} />
+                      </div>
+                    </div>
 
-		                  <div className="form-group">
-	                    <label>Registration Type</label>
-	                    <div className="module-registration-toggle">
-	                      <button type="button" className={newModRegistrationMode === 'all' ? 'active' : ''} onClick={() => setNewModRegistrationMode('all')}>
-	                        Full section cohort
-	                      </button>
-	                      <button type="button" className={newModRegistrationMode === 'custom' ? 'active' : ''} onClick={() => setNewModRegistrationMode('custom')}>
-	                        Custom students
-	                      </button>
-	                    </div>
-	                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBlockStart: '0.4rem' }}>
-	                      Matching section cohort: {managedModuleCandidateStudents.length} active student(s).
-	                    </p>
-	                  </div>
+                      <div className="form-group">
+                      <label>Registration Type</label>
+                      <div className="module-registration-toggle">
+                        <button type="button" className={newModRegistrationMode === 'all' ? 'active' : ''} onClick={() => setNewModRegistrationMode('all')}>
+                          Full section cohort
+                        </button>
+                        <button type="button" className={newModRegistrationMode === 'custom' ? 'active' : ''} onClick={() => setNewModRegistrationMode('custom')}>
+                          Custom students
+                        </button>
+                      </div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBlockStart: '0.4rem' }}>
+                        Matching section cohort: {managedModuleCandidateStudents.length} active student(s).
+                      </p>
+                    </div>
 
-	                  {newModRegistrationMode === 'custom' && (
-	                    <div className="form-group">
-	                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
-	                        <label style={{ margin: 0 }}>Select Students For This Module</label>
-	                        <button
-	                          type="button"
-	                          className="btn"
-	                          style={{ minHeight: '30px', padding: '0.25rem 0.7rem', fontSize: '0.75rem', width: 'auto' }}
-	                          onClick={() => setNewModSelectedStudents(managedModuleAvailableStudents.map(s => s.id))}
-	                          disabled={managedModuleAvailableStudents.length === 0}
-	                        >
-	                          Select All Available
-	                        </button>
-	                      </div>
-	                      <div className="module-registration-list">
-	                        {managedModuleAvailableStudents.length === 0 ? (
-	                          <div style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
-	                            No unregistered students are available in this module section.
-	                          </div>
-	                        ) : (
-	                          managedModuleAvailableStudents.map(student => (
-	                            <label key={student.id} className="module-registration-student">
-	                              <input
-	                                type="checkbox"
-	                                checked={newModSelectedStudents.includes(student.id)}
-	                                onChange={(e) => {
-	                                  if (e.target.checked) {
-	                                    setNewModSelectedStudents([...newModSelectedStudents, student.id]);
-	                                  } else {
-	                                    setNewModSelectedStudents(newModSelectedStudents.filter(id => id !== student.id));
-	                                  }
-	                                }}
-	                              />
-	                              <span>
-	                                <strong>{student.name}</strong>
-	                                <small>{student.email}</small>
-	                              </span>
-	                            </label>
-	                          ))
-	                        )}
-	                      </div>
-	                    </div>
-	                  )}
+                    {newModRegistrationMode === 'custom' && (
+                      <div className="form-group">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
+                          <label style={{ margin: 0 }}>Select Students For This Module</label>
+                          <button
+                            type="button"
+                            className="btn"
+                            style={{ minHeight: '30px', padding: '0.25rem 0.7rem', fontSize: '0.75rem', width: 'auto' }}
+                            onClick={() => setNewModSelectedStudents(managedModuleAvailableStudents.map(s => s.id))}
+                            disabled={managedModuleAvailableStudents.length === 0}
+                          >
+                            Select All Available
+                          </button>
+                        </div>
+                        <div className="module-registration-list">
+                          {managedModuleAvailableStudents.length === 0 ? (
+                            <div style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
+                              No unregistered students are available in this module section.
+                            </div>
+                          ) : (
+                            managedModuleAvailableStudents.map(student => (
+                              <label key={student.id} className="module-registration-student">
+                                <input
+                                  type="checkbox"
+                                  checked={newModSelectedStudents.includes(student.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setNewModSelectedStudents([...newModSelectedStudents, student.id]);
+                                    } else {
+                                      setNewModSelectedStudents(newModSelectedStudents.filter(id => id !== student.id));
+                                    }
+                                  }}
+                                />
+                                <span>
+                                  <strong>{student.name}</strong>
+                                  <small>{student.email}</small>
+                                </span>
+                              </label>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
 
-	                  <div className="module-roster-actions">
-	                    <select className="form-select" value={managedAddStudentId} onChange={(e) => setManagedAddStudentId(e.target.value)} disabled={!managedModuleId || managedModuleAvailableStudents.length === 0}>
+                    <div className="module-roster-actions">
+                      <select className="form-select" value={managedAddStudentId} onChange={(e) => setManagedAddStudentId(e.target.value)} disabled={!managedModuleId || managedModuleAvailableStudents.length === 0}>
                       <option value="">-- Add student from this section --</option>
                       {managedModuleAvailableStudents.map(student => (
                         <option key={student.id} value={student.id}>{student.name}</option>
@@ -1585,15 +1640,15 @@ const AdminDashboard = () => {
                     </button>
                   </div>
 
-	                  <button type="button" className="btn" style={{ justifyContent: 'center' }} onClick={handleRegisterAllForManagedModule} disabled={!managedModuleId}>
-	                    Register Full Section Cohort
-	                  </button>
+                    <button type="button" className="btn" style={{ justifyContent: 'center' }} onClick={handleRegisterAllForManagedModule} disabled={!managedModuleId}>
+                      Register Full Section Cohort
+                    </button>
 
-	                  {newModRegistrationMode === 'custom' && (
-	                    <button type="button" className="btn primary" style={{ justifyContent: 'center', marginBlockStart: '0.5rem' }} onClick={handleRegisterCustomForManagedModule} disabled={!managedModuleId || newModSelectedStudents.length === 0}>
-	                      Register Selected Students
-	                    </button>
-	                  )}
+                    {newModRegistrationMode === 'custom' && (
+                      <button type="button" className="btn primary" style={{ justifyContent: 'center', marginBlockStart: '0.5rem' }} onClick={handleRegisterCustomForManagedModule} disabled={!managedModuleId || newModSelectedStudents.length === 0}>
+                        Register Selected Students
+                      </button>
+                    )}
 
                   <div className="module-roster-list">
                     {managedModuleStudents.length === 0 ? (
@@ -1676,9 +1731,9 @@ const AdminDashboard = () => {
                         <h4 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{b.title}</h4>
                         <code style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {b.id}</code>
                       </div>
-                      <button 
+                      <button
                         type="button"
-                        className="btn" 
+                        className="btn"
                         style={{ minHeight: '28px', padding: '0.2rem 0.6rem', fontSize: '0.7rem', color: 'var(--brand-orange)', borderColor: 'var(--border-glass)' }}
                         onClick={(e) => { e.preventDefault(); handleAddSectionToBatch(b.id); }}
                       >
@@ -1703,26 +1758,26 @@ const AdminDashboard = () => {
                         {definedSections.map(sec => {
                           const sectionStudents = batchStudents.filter(s => s.section === sec);
                           return (
-                            <span 
-                              key={sec} 
-                              style={{ 
-                                background: 'rgba(30, 64, 175, 0.04)', 
-                                border: '1px solid rgba(30, 64, 175, 0.1)', 
-                                color: 'var(--brand-blue)', 
-                                fontSize: '0.75rem', 
-                                padding: '0.2rem 0.5rem', 
-                                borderRadius: '6px', 
-                                fontWeight: 700, 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                gap: '0.35rem' 
+                            <span
+                              key={sec}
+                              style={{
+                                background: 'rgba(30, 64, 175, 0.04)',
+                                border: '1px solid rgba(30, 64, 175, 0.1)',
+                                color: 'var(--brand-blue)',
+                                fontSize: '0.75rem',
+                                padding: '0.2rem 0.5rem',
+                                borderRadius: '6px',
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem'
                               }}
                             >
                               Sec {sec} ({sectionStudents.length})
-                              <span 
-                                style={{ 
-                                  cursor: 'pointer', 
-                                  color: 'var(--accent-absent)', 
+                              <span
+                                style={{
+                                  cursor: 'pointer',
+                                  color: 'var(--accent-absent)',
                                   fontWeight: 'bold',
                                   marginLeft: '0.15rem',
                                   display: 'inline-flex',
@@ -1732,7 +1787,7 @@ const AdminDashboard = () => {
                                   height: '12px',
                                   borderRadius: '50%',
                                   background: 'rgba(239, 68, 68, 0.08)'
-                                }} 
+                                }}
                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemoveSectionFromBatch(b.id, sec); }}
                               >✕</span>
                             </span>
@@ -1825,7 +1880,7 @@ const AdminDashboard = () => {
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Transaction #{log.id || idx + 1}</span>
                         </div>
                         <p style={{ fontSize: '0.85rem', fontWeight: 500, margin: 0 }}>
-                          Migrated <strong style={{ color: 'var(--brand-orange)' }}>{log.student_count} student(s)</strong> from: 
+                          Migrated <strong style={{ color: 'var(--brand-orange)' }}>{log.student_count} student(s)</strong> from:
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', margin: '0 0.5rem', background: 'rgba(15, 23, 42, 0.03)', padding: '0.1rem 0.4rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold' }}>
                             Stage {log.origin_stage} Tri {log.origin_trimester}
                           </span>
@@ -1859,7 +1914,7 @@ const AdminDashboard = () => {
               <h3 style={{ fontWeight: 700, color: 'var(--brand-blue)' }}>Create Intake Batch</h3>
               <button className="modal-close-btn" onClick={() => setIsBatchOpen(false)}>✕</button>
             </div>
-            
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBlockEnd: '1rem' }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Select Year</label>
@@ -1885,9 +1940,9 @@ const AdminDashboard = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0.5rem', marginBlockStart: '0.25rem' }}>
                 {['A', 'B', 'C', 'D'].map(sec => (
                   <label key={sec} className="checkbox-container" style={{ fontSize: '0.85rem', gap: '0.35rem', background: '#f8fafc', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-glass)' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={newBatchSections[sec]} 
+                    <input
+                      type="checkbox"
+                      checked={newBatchSections[sec]}
                       onChange={(e) => setNewBatchSections({ ...newBatchSections, [sec]: e.target.checked })}
                     />
                     Sec {sec}
@@ -1979,24 +2034,24 @@ const AdminDashboard = () => {
               <h3 style={{ fontWeight: 700, color: 'var(--brand-blue)' }}>Edit Student Profile</h3>
               <button type="button" className="modal-close-btn" onClick={(e) => { e.preventDefault(); setIsEditOpen(false); setEditingStudent(null); }}>✕</button>
             </div>
-            
+
             <div className="form-group">
               <label>Student Name</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                value={editName} 
-                onChange={(e) => setEditName(e.target.value)} 
-                required 
+              <input
+                type="text"
+                className="form-input"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                required
               />
             </div>
 
             <div className="form-group">
               <label>Academic Program</label>
-              <select 
-                className="form-select" 
-                value={editProgram} 
-                onChange={(e) => setEditProgram(e.target.value)} 
+              <select
+                className="form-select"
+                value={editProgram}
+                onChange={(e) => setEditProgram(e.target.value)}
                 style={{ width: '100%' }}
               >
                 {programs.map(p => (
@@ -2007,10 +2062,10 @@ const AdminDashboard = () => {
 
             <div className="form-group">
               <label>Intake Batch</label>
-              <select 
-                className="form-select" 
-                value={editBatch} 
-                onChange={(e) => setEditBatch(e.target.value)} 
+              <select
+                className="form-select"
+                value={editBatch}
+                onChange={(e) => setEditBatch(e.target.value)}
                 style={{ width: '100%' }}
               >
                 {batches.map(b => (
@@ -2048,10 +2103,10 @@ const AdminDashboard = () => {
 
             <div className="form-group" style={{ marginBlockEnd: '1rem' }}>
               <label>Student Status</label>
-              <select 
-                className="form-select" 
-                value={editStatus} 
-                onChange={(e) => setEditStatus(e.target.value)} 
+              <select
+                className="form-select"
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}
                 style={{ width: '100%' }}
               >
                 <option value="Active">Active</option>
@@ -2060,10 +2115,10 @@ const AdminDashboard = () => {
               </select>
             </div>
 
-            <button 
+            <button
               type="button"
-              className="btn primary" 
-              style={{ width: '100%', justifyContent: 'center', marginBlockStart: '1rem', background: 'var(--brand-orange)', color: '#fff', fontWeight: 600 }} 
+              className="btn primary"
+              style={{ width: '100%', justifyContent: 'center', marginBlockStart: '1rem', background: 'var(--brand-orange)', color: '#fff', fontWeight: 600 }}
               onClick={(e) => { e.preventDefault(); handleSaveStudentEdit(); }}
             >
               Save Student Profile

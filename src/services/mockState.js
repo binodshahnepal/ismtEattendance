@@ -435,14 +435,19 @@ class MockDatabaseClass {
     return this.data.migration_logs || [];
   }
 
-  addStudent(name, programId, stage, trimester, section = 'A', batchId = 'jan_2026') {
+  addStudent(name, programId, stage, trimester, section = 'A', batchId = 'jan_2026', studentDetails = {}) {
     const id = `std_${Date.now()}`;
-    const email = name.toLowerCase().replace(/\s+/g, '.') + '@ismt.edu.np';
+    const email = studentDetails.college_email || name.toLowerCase().replace(/\s+/g, '.') + '@ismt.edu.np';
     
     const s = {
       id,
       name,
       email,
+      contact_number: studentDetails.contact_number || '',
+      personal_email: studentDetails.personal_email || '',
+      parent_name: studentDetails.parent_name || '',
+      parent_contact_number: studentDetails.parent_contact_number || '',
+      student_code: studentDetails.student_code || '',
       program_id: programId,
       batch_id: batchId,
       stage: parseInt(stage),
@@ -467,8 +472,14 @@ class MockDatabaseClass {
 
     if (studentData.name) {
       student.name = studentData.name;
-      student.email = studentData.name.toLowerCase().replace(/\s+/g, '.') + '@ismt.edu.np';
+      student.email = studentData.college_email || studentData.name.toLowerCase().replace(/\s+/g, '.') + '@ismt.edu.np';
     }
+    if (studentData.college_email) student.email = studentData.college_email;
+    if (studentData.contact_number !== undefined) student.contact_number = studentData.contact_number;
+    if (studentData.personal_email !== undefined) student.personal_email = studentData.personal_email;
+    if (studentData.parent_name !== undefined) student.parent_name = studentData.parent_name;
+    if (studentData.parent_contact_number !== undefined) student.parent_contact_number = studentData.parent_contact_number;
+    if (studentData.student_code !== undefined) student.student_code = studentData.student_code;
     if (studentData.program_id) student.program_id = studentData.program_id;
     if (studentData.batch_id) student.batch_id = studentData.batch_id;
     if (studentData.stage) student.stage = parseInt(studentData.stage);
