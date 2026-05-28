@@ -7,7 +7,14 @@
 
 import React, { useState, useEffect } from 'react';
 
-const Calendar = ({ selectedDate, onSelectDate, dateStatuses }) => {
+const getLocalDateString = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const Calendar = ({ selectedDate, onSelectDate, dateStatuses, maxDate = '' }) => {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
 
@@ -38,7 +45,8 @@ const Calendar = ({ selectedDate, onSelectDate, dateStatuses }) => {
   const firstDayIndex = firstDayRaw === 0 ? 6 : firstDayRaw - 1;
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
+  const finalMaxDate = maxDate || todayStr;
 
   const renderCells = () => {
     const cells = [];
@@ -56,13 +64,17 @@ const Calendar = ({ selectedDate, onSelectDate, dateStatuses }) => {
 
       const isToday = dateStr === todayStr;
       const isSelected = dateStr === selectedDate;
+      const isDisabled = finalMaxDate && dateStr > finalMaxDate;
       const dateStatus = dateStatuses[dateStr] || 'unmarked';
 
       cells.push(
         <div
           key={`day-${day}`}
-          className={`cal-cell ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}`}
-          onClick={() => onSelectDate(dateStr)}
+          className={`cal-cell ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+          title={isDisabled ? 'Future dates cannot be selected for attendance.' : ''}
+          onClick={() => {
+            if (!isDisabled) onSelectDate(dateStr);
+          }}
         >
           {day}
           {dateStatus !== 'unmarked' && (

@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 
-const AttendanceSheet = ({ date, moduleId, students, attendance, onSaveRecord, onBulkMark, onStudentClick }) => {
+const AttendanceSheet = ({ date, moduleId, students, attendance, onSaveRecord, onBulkMark, onStudentClick, disabled = false, disabledMessage = '' }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [saveStatus, setSaveStatus] = useState('synced'); // 'synced' | 'saving'
 
@@ -16,6 +16,7 @@ const AttendanceSheet = ({ date, moduleId, students, attendance, onSaveRecord, o
   );
 
   const handleStatusChange = (studentId, status, notes = '') => {
+    if (disabled) return;
     setSaveStatus('saving');
     onSaveRecord(studentId, status, notes);
     setTimeout(() => {
@@ -24,6 +25,7 @@ const AttendanceSheet = ({ date, moduleId, students, attendance, onSaveRecord, o
   };
 
   const handleBulkClick = (status) => {
+    if (disabled) return;
     setSaveStatus('saving');
     onBulkMark(status);
     setTimeout(() => {
@@ -74,10 +76,16 @@ const AttendanceSheet = ({ date, moduleId, students, attendance, onSaveRecord, o
           onChange={(e) => setSearchQuery(e.target.value)}
         />
         <div className="btn-group">
-          <button className="btn success" onClick={() => handleBulkClick('P')}>All Present</button>
-          <button className="btn" style={{ color: 'var(--accent-absent)', borderColor: 'rgba(239,68,68,0.2)' }} onClick={() => handleBulkClick('A')}>All Absent</button>
+          <button className="btn success" onClick={() => handleBulkClick('P')} disabled={disabled}>All Present</button>
+          <button className="btn" style={{ color: 'var(--accent-absent)', borderColor: 'rgba(239,68,68,0.2)' }} onClick={() => handleBulkClick('A')} disabled={disabled}>All Absent</button>
         </div>
       </div>
+
+      {disabled && disabledMessage && (
+        <div style={{ border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', padding: '0.75rem', color: 'var(--accent-absent)', background: 'rgba(239, 68, 68, 0.06)', fontSize: '0.85rem', marginBlockEnd: '1rem' }}>
+          {disabledMessage}
+        </div>
+      )}
 
       {/* 3. Student list */}
       <div className="student-list-container" style={{ maxHeight: '460px' }}>
@@ -109,6 +117,7 @@ const AttendanceSheet = ({ date, moduleId, students, attendance, onSaveRecord, o
                     className="notes-input"
                     placeholder="Add comment..."
                     value={record.notes || ''}
+                    disabled={disabled}
                     onChange={(e) => handleStatusChange(student.id, record.status || 'P', e.target.value)}
                   />
 
@@ -118,6 +127,7 @@ const AttendanceSheet = ({ date, moduleId, students, attendance, onSaveRecord, o
                         key={status}
                         className={`pill-btn ${record.status === status ? 'active' : ''}`}
                         data-status={status}
+                        disabled={disabled}
                         onClick={() => handleStatusChange(student.id, status, record.notes || '')}
                       >
                         {status}

@@ -11,6 +11,8 @@ class MockDatabaseClass {
     this.data = {
       batches: {},          // { id: { id, title } }
       programs: {},
+      admins: [],
+      tutors: [],
       students: [],
       modules: {},
       enrollments: [],      // { id, studentId, moduleId, status }
@@ -21,11 +23,29 @@ class MockDatabaseClass {
     this.init();
   }
 
+  getDefaultTutorEmail(name) {
+    const knownEmails = {
+      'Dr. Susan Mahato': 'susan.mahato@ismt.edu.np',
+      'Er. Suman Rai': 'suman.rai@ismt.edu.np',
+      'Mrs. Grishma Amatya': 'grishma.amatya@ismt.edu.np',
+      'Er. Bijay Upreti': 'bijay.upreti@ismt.edu.np',
+      'Mr. Reyon Rai': 'reyon.rai@ismt.edu.np',
+      'Mrs. Susmita Singh': 'susmita.singh@ismt.edu.np',
+      'Chef Suman Mahato': 'chef.suman@ismt.edu.np',
+      'Dr. Bijay Upreti': 'dr.bijay@ismt.edu.np',
+      'Prof. Grishma Amatya': 'prof.grishma@ismt.edu.np'
+    };
+    return knownEmails[name] || `${name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '')}@ismt.edu.np`;
+  }
+
   init() {
     const saved = localStorage.getItem(this.storageKey);
     if (saved) {
       try {
         this.data = JSON.parse(saved);
+        this.ensureAdminDefaults();
+        this.ensureTutorDefaults();
+        this.ensureStudentCredentialDefaults();
       } catch (e) {
         console.error("Failed to parse mock state, re-seeding...", e);
         this.seedData();
@@ -33,6 +53,83 @@ class MockDatabaseClass {
     } else {
       this.seedData();
     }
+  }
+
+  ensureAdminDefaults() {
+    if (!Array.isArray(this.data.admins) || this.data.admins.length === 0) {
+      this.data.admins = [{
+        id: 'admin_super',
+        name: 'Super Administrator',
+        email: 'admin@ismt.edu.np',
+        password: 'Admin@123',
+        privilege: 'full',
+        permissions: ['overview', 'operations', 'setup', 'leaves', 'students', 'attendance', 'modules', 'assignments', 'batches', 'programs', 'migrations', 'access'],
+        status: 'Active'
+      }];
+      this.save();
+    }
+    this.data.admins.forEach(admin => {
+      if (!Array.isArray(admin.permissions)) {
+        admin.permissions = admin.privilege === 'full'
+          ? ['overview', 'operations', 'setup', 'leaves', 'students', 'attendance', 'modules', 'assignments', 'batches', 'programs', 'migrations', 'access']
+          : ['overview', 'students', 'attendance', 'migrations'];
+      }
+    });
+  }
+
+  ensureTutorDefaults() {
+    if (!Array.isArray(this.data.tutors)) {
+      const tutorNames = Array.from(new Set(
+        Object.values(this.data.modules || {})
+          .map(m => (m.tutor || '').trim())
+          .filter(name => name && name !== 'Unassigned')
+      ));
+      this.data.tutors = tutorNames.map(name => this.buildTutorRecord(name));
+    }
+
+    this.data.tutors.forEach(tutor => {
+      const defaultEmail = this.getDefaultTutorEmail(tutor.name);
+      if (defaultEmail) tutor.email = defaultEmail;
+      if (!tutor.password) tutor.password = 'ChangeMe@123';
+      if (tutor.must_change_password === undefined) tutor.must_change_password = true;
+      if (!tutor.status) tutor.status = 'Active';
+    });
+
+    Object.values(this.data.modules || {}).forEach(mod => {
+      if (!mod.tutor_id && mod.tutor && mod.tutor !== 'Unassigned') {
+        const tutor = this.data.tutors.find(t => t.name === mod.tutor);
+        if (tutor) mod.tutor_id = tutor.id;
+      }
+      if (!mod.class_start_date) mod.class_start_date = '2026-05-01';
+      if (!mod.class_end_date) mod.class_end_date = '2026-08-31';
+    });
+    this.save();
+  }
+
+  ensureStudentCredentialDefaults() {
+    if (!Array.isArray(this.data.students)) return;
+    this.data.students.forEach(student => {
+      if (!student.email) {
+        student.email = `${student.name.toLowerCase().replace(/\s+/g, '.')}@ismt.edu.np`;
+      }
+      if (!student.password) student.password = 'Student@123';
+      if (student.must_change_password === undefined) student.must_change_password = true;
+    });
+    this.save();
+  }
+
+  buildTutorRecord(name, details = {}) {
+    const baseEmail = details.email || this.getDefaultTutorEmail(name);
+    return {
+      id: details.id || `tutor_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      email: baseEmail,
+      phone: details.phone || '',
+      department: details.department || '',
+      password: details.password || 'ChangeMe@123',
+      must_change_password: details.must_change_password !== undefined ? details.must_change_password : true,
+      status: details.status || 'Active'
+    };
   }
 
   save() {
@@ -54,6 +151,28 @@ class MockDatabaseClass {
       'bhm': { id: 'bhm', title: 'Hospitality Management (BHM)', duration_years: 3 },
       'mba': { id: 'mba', title: 'Master of Business Administration (MBA)', duration_years: 2 }
     };
+
+    this.data.admins = [{
+      id: 'admin_super',
+      name: 'Super Administrator',
+      email: 'admin@ismt.edu.np',
+      password: 'Admin@123',
+      privilege: 'full',
+      permissions: ['overview', 'operations', 'setup', 'leaves', 'students', 'attendance', 'modules', 'assignments', 'batches', 'programs', 'migrations', 'access'],
+      status: 'Active'
+    }];
+
+    this.data.tutors = [
+      this.buildTutorRecord('Dr. Susan Mahato', { id: 'tutor_susan_mahato', email: 'susan.mahato@ismt.edu.np', department: 'Computing' }),
+      this.buildTutorRecord('Er. Suman Rai', { id: 'tutor_suman_rai', email: 'suman.rai@ismt.edu.np', department: 'Computing' }),
+      this.buildTutorRecord('Mrs. Grishma Amatya', { id: 'tutor_grishma_amatya', email: 'grishma.amatya@ismt.edu.np', department: 'Computing' }),
+      this.buildTutorRecord('Er. Bijay Upreti', { id: 'tutor_bijay_upreti', email: 'bijay.upreti@ismt.edu.np', department: 'Computing' }),
+      this.buildTutorRecord('Mr. Reyon Rai', { id: 'tutor_reyon_rai', email: 'reyon.rai@ismt.edu.np', department: 'Cybersecurity' }),
+      this.buildTutorRecord('Mrs. Susmita Singh', { id: 'tutor_susmita_singh', email: 'susmita.singh@ismt.edu.np', department: 'Hospitality' }),
+      this.buildTutorRecord('Chef Suman Mahato', { id: 'tutor_chef_suman', email: 'chef.suman@ismt.edu.np', department: 'Hospitality' }),
+      this.buildTutorRecord('Dr. Bijay Upreti', { id: 'tutor_dr_bijay', email: 'dr.bijay@ismt.edu.np', department: 'Management' }),
+      this.buildTutorRecord('Prof. Grishma Amatya', { id: 'tutor_prof_grishma', email: 'prof.grishma@ismt.edu.np', department: 'Management' })
+    ];
 
     // 3. Academic Modules (Subjects)
     const modulesList = [
@@ -96,6 +215,10 @@ class MockDatabaseClass {
       { id: 'mba_s1_t1_ob', title: 'Organizational Behavior', program_id: 'mba', stage: 1, trimester: 1, tutor: 'Mrs. Susmita Singh', batch_id: 'jan_2026', section: 'A' }
     ];
     modulesList.forEach(m => {
+      const tutor = this.data.tutors.find(t => t.name === m.tutor);
+      m.tutor_id = tutor ? tutor.id : null;
+      m.class_start_date = '2026-05-01';
+      m.class_end_date = '2026-08-31';
       this.data.modules[m.id] = m;
     });
 
@@ -130,6 +253,7 @@ class MockDatabaseClass {
       { id: 'std_14', name: 'Tsering Sherpa', email: 'tsering.sherpa@ismt.edu.np', program_id: 'mba', batch_id: 'jan_2026', stage: 1, trimester: 1, section: 'A', status: 'Active' }
     ];
     this.data.students = studentsList;
+    this.ensureStudentCredentialDefaults();
 
     // 5. Enroll Students
     this.data.students.forEach(s => {
@@ -266,6 +390,109 @@ class MockDatabaseClass {
 
   fetchPrograms() {
     return Object.values(this.data.programs);
+  }
+
+  fetchAdmins(includeInactive = false) {
+    const admins = Array.isArray(this.data.admins) ? this.data.admins : [];
+    return includeInactive ? admins : admins.filter(admin => admin.status === 'Active');
+  }
+
+  addAdmin(name, email, privilege = 'partial', permissions = []) {
+    if (!this.data.admins) this.data.admins = [];
+    const normalizedEmail = email.trim().toLowerCase();
+    if (this.data.admins.some(admin => admin.email.toLowerCase() === normalizedEmail)) {
+      return { error: 'An admin with this email already exists.' };
+    }
+    const admin = {
+      id: `admin_${Date.now()}`,
+      name: name.trim(),
+      email: normalizedEmail,
+      password: 'Admin@123',
+      privilege,
+      permissions: privilege === 'full'
+        ? ['overview', 'operations', 'setup', 'leaves', 'students', 'attendance', 'modules', 'assignments', 'batches', 'programs', 'migrations', 'access']
+        : permissions,
+      status: 'Active'
+    };
+    this.data.admins.push(admin);
+    this.save();
+    return admin;
+  }
+
+  validateAdminLogin(email, password) {
+    const admin = (this.data.admins || []).find(item => item.email.toLowerCase() === email.trim().toLowerCase());
+    if (!admin || admin.status !== 'Active' || admin.password !== password) return null;
+    return admin;
+  }
+
+  resetTutorPassword(tutorId) {
+    const tutor = (this.data.tutors || []).find(item => item.id === tutorId);
+    if (!tutor) return false;
+    tutor.password = 'ChangeMe@123';
+    tutor.must_change_password = true;
+    this.save();
+    return true;
+  }
+
+  resetStudentPassword(studentId) {
+    const student = (this.data.students || []).find(item => item.id === studentId);
+    if (!student) return false;
+    student.password = 'Student@123';
+    student.must_change_password = true;
+    this.save();
+    return true;
+  }
+
+  fetchTutors(includeInactive = false) {
+    const tutors = Array.isArray(this.data.tutors) ? this.data.tutors : [];
+    return includeInactive ? tutors : tutors.filter(t => t.status === 'Active');
+  }
+
+  addTutor(name, email, phone = '', department = '') {
+    if (!this.data.tutors) this.data.tutors = [];
+    const normalizedEmail = email.trim().toLowerCase();
+    if (this.data.tutors.some(t => t.email.toLowerCase() === normalizedEmail)) {
+      return { error: 'A tutor with this college email already exists.' };
+    }
+
+    const tutor = this.buildTutorRecord(name.trim(), {
+      email: normalizedEmail,
+      phone,
+      department
+    });
+    this.data.tutors.push(tutor);
+    this.save();
+    return tutor;
+  }
+
+  validateTutorLogin(email, password) {
+    const tutor = (this.data.tutors || []).find(t => t.email.toLowerCase() === email.trim().toLowerCase());
+    if (!tutor || tutor.status !== 'Active' || tutor.password !== password) return null;
+    return tutor;
+  }
+
+  updateTutorPassword(tutorId, currentPassword, newPassword) {
+    const tutor = (this.data.tutors || []).find(t => t.id === tutorId);
+    if (!tutor || tutor.password !== currentPassword) return false;
+    tutor.password = newPassword;
+    tutor.must_change_password = false;
+    this.save();
+    return true;
+  }
+
+  validateStudentLogin(email, password) {
+    const student = (this.data.students || []).find(s => (s.email || '').toLowerCase() === email.trim().toLowerCase());
+    if (!student || student.status !== 'Active' || student.password !== password) return null;
+    return student;
+  }
+
+  updateStudentPassword(studentId, currentPassword, newPassword) {
+    const student = (this.data.students || []).find(s => s.id === studentId);
+    if (!student || student.password !== currentPassword) return false;
+    student.password = newPassword;
+    student.must_change_password = false;
+    this.save();
+    return true;
   }
 
   fetchModules(programId = null, stage = null, trimester = null, section = null, batchId = null) {
@@ -453,7 +680,9 @@ class MockDatabaseClass {
       stage: parseInt(stage),
       trimester: parseInt(trimester),
       section,
-      status: 'Active'
+      status: 'Active',
+      password: studentDetails.password || 'Student@123',
+      must_change_password: studentDetails.must_change_password !== undefined ? studentDetails.must_change_password : true
     };
 
     this.data.students.push(s);
@@ -475,6 +704,8 @@ class MockDatabaseClass {
       student.email = studentData.college_email || studentData.name.toLowerCase().replace(/\s+/g, '.') + '@ismt.edu.np';
     }
     if (studentData.college_email) student.email = studentData.college_email;
+    if (!student.password) student.password = 'Student@123';
+    if (student.must_change_password === undefined) student.must_change_password = true;
     if (studentData.contact_number !== undefined) student.contact_number = studentData.contact_number;
     if (studentData.personal_email !== undefined) student.personal_email = studentData.personal_email;
     if (studentData.parent_name !== undefined) student.parent_name = studentData.parent_name;
@@ -530,16 +761,22 @@ class MockDatabaseClass {
     return true;
   }
 
-  addModule(id, title, programId, stage, trimester, tutor, batchId, section = 'A') {
+  addModule(id, title, programId, stage, trimester, tutor, batchId, section = 'A', moduleDetails = {}) {
+    const tutorRecord = moduleDetails.tutor_id
+      ? (this.data.tutors || []).find(t => t.id === moduleDetails.tutor_id)
+      : (this.data.tutors || []).find(t => t.name === tutor);
     const mod = { 
       id, 
       title, 
       program_id: programId, 
       stage: parseInt(stage), 
       trimester: parseInt(trimester), 
-      tutor, 
+      tutor: tutorRecord ? tutorRecord.name : tutor, 
+      tutor_id: tutorRecord ? tutorRecord.id : moduleDetails.tutor_id || null,
       batch_id: batchId, 
-      section 
+      section,
+      class_start_date: moduleDetails.class_start_date || '2026-05-01',
+      class_end_date: moduleDetails.class_end_date || '2026-08-31'
     };
     this.data.modules[id] = mod;
     this.save();
@@ -555,8 +792,11 @@ class MockDatabaseClass {
     if (moduleData.stage !== undefined) mod.stage = parseInt(moduleData.stage);
     if (moduleData.trimester !== undefined) mod.trimester = parseInt(moduleData.trimester);
     if (moduleData.tutor !== undefined) mod.tutor = moduleData.tutor;
+    if (moduleData.tutor_id !== undefined) mod.tutor_id = moduleData.tutor_id;
     if (moduleData.batch_id !== undefined) mod.batch_id = moduleData.batch_id;
     if (moduleData.section !== undefined) mod.section = moduleData.section;
+    if (moduleData.class_start_date !== undefined) mod.class_start_date = moduleData.class_start_date;
+    if (moduleData.class_end_date !== undefined) mod.class_end_date = moduleData.class_end_date;
 
     this.save();
     return true;
@@ -653,6 +893,10 @@ class MockDatabaseClass {
             date: dateStr,
             moduleId,
             moduleTitle: mod ? mod.title : 'Unknown Module',
+            module: mod || null,
+            tutor: mod ? mod.tutor : 'Unassigned',
+            batchId: mod ? mod.batch_id : null,
+            section: mod ? mod.section : null,
             status: studentMap[studentId].status,
             notes: studentMap[studentId].notes
           });

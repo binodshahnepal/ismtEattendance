@@ -50,20 +50,41 @@ ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_name VARCHAR(255);
 ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_contact_number VARCHAR(50);
 ALTER TABLE students ADD COLUMN IF NOT EXISTS student_code VARCHAR(100);
 
--- 4. MODULES
+-- 4. TUTORS (College staff login credentials)
+CREATE TABLE IF NOT EXISTS tutors (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    phone VARCHAR(50),
+    department VARCHAR(255),
+    password VARCHAR(255) NOT NULL DEFAULT 'ChangeMe@123',
+    must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
+    status VARCHAR(50) NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Inactive')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 5. MODULES
 CREATE TABLE IF NOT EXISTS modules (
     id VARCHAR(50) PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     program_id VARCHAR(50) REFERENCES programs(id) ON DELETE CASCADE,
     batch_id VARCHAR(50) REFERENCES batches(id) ON DELETE CASCADE,
+    tutor_id VARCHAR(50) REFERENCES tutors(id) ON DELETE SET NULL,
     section VARCHAR(50) NOT NULL DEFAULT 'A',
     stage INT NOT NULL CHECK (stage BETWEEN 1 AND 3),
     trimester INT NOT NULL CHECK (trimester BETWEEN 1 AND 3),
     tutor VARCHAR(255) NOT NULL,
+    class_start_date DATE,
+    class_end_date DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. ENROLLMENTS (Links students to modules they take)
+-- Existing Supabase databases created before this update need tutor assignment fields.
+ALTER TABLE modules ADD COLUMN IF NOT EXISTS tutor_id VARCHAR(50) REFERENCES tutors(id) ON DELETE SET NULL;
+ALTER TABLE modules ADD COLUMN IF NOT EXISTS class_start_date DATE;
+ALTER TABLE modules ADD COLUMN IF NOT EXISTS class_end_date DATE;
+
+-- 6. ENROLLMENTS (Links students to modules they take)
 CREATE TABLE IF NOT EXISTS enrollments (
     id SERIAL PRIMARY KEY,
     student_id VARCHAR(50) REFERENCES students(id) ON DELETE CASCADE,
@@ -73,7 +94,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
     UNIQUE (student_id, module_id)
 );
 
--- 6. ATTENDANCE RECORDS (Tracks status per student enrollment per date)
+-- 7. ATTENDANCE RECORDS (Tracks status per student enrollment per date)
 CREATE TABLE IF NOT EXISTS attendance (
     id SERIAL PRIMARY KEY,
     enrollment_id INT REFERENCES enrollments(id) ON DELETE CASCADE,
@@ -84,7 +105,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     UNIQUE (enrollment_id, record_date)
 );
 
--- 7. LEAVE APPLICATIONS (Digital requests filed by students)
+-- 8. LEAVE APPLICATIONS (Digital requests filed by students)
 CREATE TABLE IF NOT EXISTS leave_applications (
     id SERIAL PRIMARY KEY,
     student_id VARCHAR(50) REFERENCES students(id) ON DELETE CASCADE,
@@ -96,7 +117,7 @@ CREATE TABLE IF NOT EXISTS leave_applications (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 8. MIGRATION LOGS (History tracker of cohort migrations)
+-- 9. MIGRATION LOGS (History tracker of cohort migrations)
 CREATE TABLE IF NOT EXISTS migration_logs (
     id SERIAL PRIMARY KEY,
     program_id VARCHAR(50) REFERENCES programs(id) ON DELETE CASCADE,
@@ -116,6 +137,9 @@ CREATE INDEX IF NOT EXISTS idx_students_cohort ON students (program_id, stage, t
 CREATE INDEX IF NOT EXISTS idx_students_batch ON students (batch_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_students_student_code_unique ON students (student_code) WHERE student_code IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_modules_trimester ON modules (program_id, stage, trimester);
+CREATE INDEX IF NOT EXISTS idx_modules_tutor_assignments ON modules (tutor, batch_id, section);
+CREATE INDEX IF NOT EXISTS idx_modules_tutor_window ON modules (tutor_id, class_start_date, class_end_date);
+CREATE INDEX IF NOT EXISTS idx_tutors_email ON tutors (email);
 CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance (record_date);
 CREATE INDEX IF NOT EXISTS idx_leaves_student ON leave_applications (student_id);
 CREATE INDEX IF NOT EXISTS idx_migration_logs_date ON migration_logs (executed_at);

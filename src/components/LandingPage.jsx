@@ -7,11 +7,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { dbService } from '../services/dbService';
+import Swal from 'sweetalert2';
+import 'sweetalert2/dist/sweetalert2.min.css';
 
 const LandingPage = ({ onSelectRole }) => {
   const [students, setStudents] = useState([]);
   const [batches, setBatches] = useState([]);
-  const [selectedStudent, setSelectedStudent] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [tutorEmail, setTutorEmail] = useState('');
+  const [tutorPassword, setTutorPassword] = useState('');
+  const [studentEmail, setStudentEmail] = useState('');
+  const [studentPassword, setStudentPassword] = useState('');
 
   useEffect(() => {
     loadPortalData();
@@ -23,18 +30,75 @@ const LandingPage = ({ onSelectRole }) => {
     
     const bts = await dbService.getBatches();
     setBatches(bts);
-
-    if (list.length > 0) {
-      setSelectedStudent(list[0].id);
-    }
   };
 
-  const handleStudentLogin = () => {
-    if (!selectedStudent) {
-      alert("Please select a student profile first.");
+  const handleAdminLogin = async () => {
+    if (!adminEmail.trim() || !adminPassword) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Credentials required',
+        text: 'Please enter admin email and password.'
+      });
       return;
     }
-    onSelectRole('student', selectedStudent);
+
+    const admin = await dbService.validateAdminLogin(adminEmail, adminPassword);
+    if (!admin) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Login failed',
+        text: 'Invalid admin credentials.'
+      });
+      return;
+    }
+
+    onSelectRole('admin', admin.id);
+  };
+
+  const handleStudentLogin = async () => {
+    if (!studentEmail.trim() || !studentPassword) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Credentials required',
+        text: 'Please enter student college email and password.'
+      });
+      return;
+    }
+
+    const student = await dbService.validateStudentLogin(studentEmail, studentPassword);
+    if (!student) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Login failed',
+        text: 'Invalid student credentials.'
+      });
+      return;
+    }
+
+    onSelectRole('student', student.id);
+  };
+
+  const handleTutorLogin = async () => {
+    if (!tutorEmail.trim() || !tutorPassword) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Credentials required',
+        text: 'Please enter tutor college email and password.'
+      });
+      return;
+    }
+
+    const tutor = await dbService.validateTutorLogin(tutorEmail, tutorPassword);
+    if (!tutor) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Login failed',
+        text: 'Invalid tutor credentials.'
+      });
+      return;
+    }
+
+    onSelectRole('tutor', tutor.id);
   };
 
   return (
@@ -70,11 +134,28 @@ const LandingPage = ({ onSelectRole }) => {
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               Orchestrate trimester bulk migrations, manage student databases, setup modules, and audit leaves.
             </p>
+            <div className="form-group" style={{ textAlign: 'left', marginBlockStart: '0.75rem', marginBlockEnd: 0 }}>
+              <input
+                className="form-input"
+                type="email"
+                placeholder="admin@ismt.edu.np"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                style={{ marginBlockEnd: '0.5rem' }}
+              />
+              <input
+                className="form-input"
+                type="password"
+                placeholder="Password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+              />
+            </div>
           </div>
           <button 
             className="btn primary" 
             style={{ width: '100%', justifyContent: 'center', marginBlockStart: 'auto' }}
-            onClick={() => onSelectRole('admin')}
+            onClick={handleAdminLogin}
           >
             Enter Admin Panel
           </button>
@@ -88,11 +169,28 @@ const LandingPage = ({ onSelectRole }) => {
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               Select assigned modules, mark daily section registers in seconds, add comments, and diagnose profiles.
             </p>
+            <div className="form-group" style={{ textAlign: 'left', marginBlockStart: '0.75rem', marginBlockEnd: 0 }}>
+              <input
+                className="form-input"
+                type="email"
+                placeholder="college.email@ismt.edu.np"
+                value={tutorEmail}
+                onChange={(e) => setTutorEmail(e.target.value)}
+                style={{ marginBlockEnd: '0.5rem' }}
+              />
+              <input
+                className="form-input"
+                type="password"
+                placeholder="Password"
+                value={tutorPassword}
+                onChange={(e) => setTutorPassword(e.target.value)}
+              />
+            </div>
           </div>
           <button 
             className="btn primary" 
             style={{ width: '100%', justifyContent: 'center', marginBlockStart: 'auto' }}
-            onClick={() => onSelectRole('tutor')}
+            onClick={handleTutorLogin}
           >
             Enter Tutor Panel
           </button>
@@ -106,32 +204,29 @@ const LandingPage = ({ onSelectRole }) => {
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBlockEnd: '0.75rem' }}>
               Track attendance score gauges, analyze subject stats, view heatmap logs, and file leave requests.
             </p>
-            
-            {students.length > 0 && (
-              <div className="form-group" style={{ textAlign: 'left', marginBlockEnd: '0' }}>
-                <select 
-                  className="form-select" 
-                  value={selectedStudent} 
-                  onChange={(e) => setSelectedStudent(e.target.value)} 
-                  style={{ width: '100%', minHeight: '38px', padding: '0.4rem' }}
-                >
-                  {students.map(s => {
-                    const b = batches.find(batch => batch.id === s.batch_id);
-                    const batchLabel = b ? b.title.substring(0, 12) : 'Intake';
-                    return (
-                      <option key={s.id} value={s.id}>{s.name} ({batchLabel} - S{s.stage}T{s.trimester})</option>
-                    );
-                  })}
-                </select>
-              </div>
-            )}
+            <div className="form-group" style={{ textAlign: 'left', marginBlockStart: '0.75rem', marginBlockEnd: 0 }}>
+              <input
+                className="form-input"
+                type="email"
+                placeholder="student@ismt.edu.np"
+                value={studentEmail}
+                onChange={(e) => setStudentEmail(e.target.value)}
+                style={{ marginBlockEnd: '0.5rem' }}
+              />
+              <input
+                className="form-input"
+                type="password"
+                placeholder="Password"
+                value={studentPassword}
+                onChange={(e) => setStudentPassword(e.target.value)}
+              />
+            </div>
           </div>
           
           <button 
             className="btn primary" 
             style={{ width: '100%', justifyContent: 'center', marginBlockStart: 'auto', background: 'var(--brand-orange)', boxShadow: '0 4px 12px var(--brand-orange-glow)' }}
             onClick={handleStudentLogin}
-            disabled={students.length === 0}
           >
             Enter Student Portal
           </button>

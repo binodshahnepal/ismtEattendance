@@ -14,17 +14,27 @@ import StudentDashboard from './components/StudentDashboard';
 function App() {
   const [activeRole, setActiveRole] = useState('landing'); // 'landing' | 'admin' | 'tutor' | 'student'
   const [activeStudentId, setActiveStudentId] = useState('');
+  const [activeTutorId, setActiveTutorId] = useState('');
+  const [activeAdminId, setActiveAdminId] = useState('');
 
-  const handleSelectRole = (role, studentId = '') => {
+  const handleSelectRole = (role, payload = '') => {
     setActiveRole(role);
     if (role === 'student') {
-      setActiveStudentId(studentId);
+      setActiveStudentId(payload);
+    }
+    if (role === 'tutor') {
+      setActiveTutorId(payload);
+    }
+    if (role === 'admin') {
+      setActiveAdminId(payload);
     }
   };
 
   const handleLogout = () => {
     setActiveRole('landing');
     setActiveStudentId('');
+    setActiveTutorId('');
+    setActiveAdminId('');
   };
 
   return (
@@ -91,11 +101,11 @@ function App() {
         )}
         
         {activeRole === 'admin' && (
-          <AdminDashboard />
+          <AdminDashboard adminId={activeAdminId} />
         )}
         
         {activeRole === 'tutor' && (
-          <TutorDashboard />
+          <TutorDashboard tutorId={activeTutorId} />
         )}
         
         {activeRole === 'student' && (

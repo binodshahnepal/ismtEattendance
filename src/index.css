@@ -321,6 +321,18 @@ header {
   transform: translateY(-1px);
 }
 
+.cal-cell.disabled {
+  color: var(--text-muted);
+  background: #f8fafc;
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.cal-cell.disabled:hover {
+  background: #f8fafc;
+  transform: none;
+}
+
 .cal-cell.empty {
   visibility: hidden;
   pointer-events: none;

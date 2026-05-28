@@ -7,6 +7,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { dbService } from '../services/dbService';
+import Swal from 'sweetalert2';
+import 'sweetalert2/dist/sweetalert2.min.css';
 
 const StudentDashboard = ({ studentId }) => {
   const [student, setStudent] = useState(null);
@@ -20,6 +22,9 @@ const StudentDashboard = ({ studentId }) => {
   const [leaveEnd, setLeaveEnd] = useState('');
   const [leaveType, setLeaveType] = useState('Medical');
   const [leaveReason, setLeaveReason] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   // Calendar states
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -68,6 +73,34 @@ const StudentDashboard = ({ studentId }) => {
     
     const lvs = await dbService.getStudentLeaves(studentId);
     setLeaves(lvs);
+  };
+
+  const handleChangePassword = async () => {
+    if (!student) return;
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      Swal.fire({ icon: 'error', title: 'Password fields required', text: 'Please fill all password fields.' });
+      return;
+    }
+    if (newPassword.length < 8) {
+      Swal.fire({ icon: 'error', title: 'Password too short', text: 'New password must be at least 8 characters.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Swal.fire({ icon: 'error', title: 'Password mismatch', text: 'New password and confirmation do not match.' });
+      return;
+    }
+
+    const updated = await dbService.updateStudentPassword(student.id, currentPassword, newPassword);
+    if (!updated) {
+      Swal.fire({ icon: 'error', title: 'Password not changed', text: 'Current password is incorrect.' });
+      return;
+    }
+
+    Swal.fire({ icon: 'success', title: 'Password updated', text: 'Your password has been changed successfully.' });
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setStudent({ ...student, must_change_password: false });
   };
 
   if (!student) {
@@ -192,11 +225,20 @@ const StudentDashboard = ({ studentId }) => {
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: 500 }}>
             🎓 Course: {program?.title || 'General'} • Stage {student.stage}, Trimester {student.trimester} • Section {student.section} • <strong style={{ color: 'var(--brand-orange)' }}>{batch?.title || 'General Intake'}</strong>
           </p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBlockStart: '0.25rem' }}>
+            Username: <strong>{student.email}</strong>
+          </p>
         </div>
         <div style={{ fontSize: '0.85rem', fontWeight: 600, color: warningClass, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '0.4rem 1rem' }}>
           {warningText}
         </div>
       </div>
+
+      {student.must_change_password && (
+        <div style={{ border: '1px solid rgba(245, 158, 11, 0.35)', borderRadius: '8px', padding: '0.85rem', fontSize: '0.85rem', color: 'var(--accent-late)', background: 'rgba(245, 158, 11, 0.08)' }}>
+          Please change the default password from your dashboard.
+        </div>
+      )}
 
       {/* 2. Global rate and personal calendar layout */}
       <div className="migration-grid">
@@ -364,6 +406,18 @@ const StudentDashboard = ({ studentId }) => {
           </div>
         </div>
 
+      </div>
+
+      <div className="glass-card">
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBlockEnd: '1rem', color: 'var(--brand-blue)' }}>Change Password</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+          <input className="form-input" type="password" placeholder="Current password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+          <input className="form-input" type="password" placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          <input className="form-input" type="password" placeholder="Confirm new password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+          <button type="button" className="btn primary" style={{ justifyContent: 'center' }} onClick={handleChangePassword}>
+            Update Password
+          </button>
+        </div>
       </div>
 
     </div>

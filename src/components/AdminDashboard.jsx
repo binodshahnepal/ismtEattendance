@@ -40,13 +40,35 @@ const STAGE_UNIT_TEMPLATES = {
 const buildStageUnitModuleId = (programId, stage, unitId, batchId, section) =>
   `${programId}_s${stage}_${unitId}_${batchId}_sec${section}`.toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
-const AdminDashboard = () => {
+const ADMIN_PERMISSION_OPTIONS = [
+  { id: 'overview', label: 'Overview', description: 'View dashboard metrics and pending summaries' },
+  { id: 'operations', label: 'Cohort Ops', description: 'Run migrations and manual enrollments' },
+  { id: 'setup', label: 'Setup', description: 'Enroll students and manage setup panels' },
+  { id: 'leaves', label: 'Leaves', description: 'Approve or reject leave requests' },
+  { id: 'students', label: 'Students', description: 'View and manage student directory' },
+  { id: 'attendance', label: 'Attendance', description: 'View attendance cards and registers' },
+  { id: 'modules', label: 'Modules', description: 'Create modules and manage rosters' },
+  { id: 'assignments', label: 'Tutor Assignments', description: 'Assign tutors and date windows' },
+  { id: 'batches', label: 'Batches', description: 'Manage intake batches and sections' },
+  { id: 'programs', label: 'Programs', description: 'Manage academic programs' },
+  { id: 'migrations', label: 'History', description: 'View migration history' },
+  { id: 'access', label: 'Access', description: 'Create admins and reset passwords' }
+];
+
+const DEFAULT_PARTIAL_ADMIN_PERMISSIONS = ['overview', 'students', 'attendance', 'migrations'];
+const ALL_ADMIN_PERMISSIONS = ADMIN_PERMISSION_OPTIONS.map(permission => permission.id);
+
+const AdminDashboard = ({ adminId }) => {
   // Lists
+  const [admins, setAdmins] = useState([]);
   const [batches, setBatches] = useState([]);
   const [programs, setPrograms] = useState([]);
+  const [tutors, setTutors] = useState([]);
   const [modules, setModules] = useState([]);
   const [students, setStudents] = useState([]);
   const [leaves, setLeaves] = useState([]);
+  const [attendanceSummaries, setAttendanceSummaries] = useState([]);
+  const [attendanceRegisterStudents, setAttendanceRegisterStudents] = useState([]);
 
   // Bulk Migration states
   const [migProgram, setMigProgram] = useState('bsc_cse');
@@ -103,7 +125,6 @@ const AdminDashboard = () => {
   const [unitEnrollStage, setUnitEnrollStage] = useState('1');
   const [unitEnrollBatch, setUnitEnrollBatch] = useState('jan_2026');
   const [unitEnrollSection, setUnitEnrollSection] = useState('A');
-  const [unitEnrollTutor, setUnitEnrollTutor] = useState('');
   const [unitEnrollMode, setUnitEnrollMode] = useState('all');
   const [selectedStageUnitIds, setSelectedStageUnitIds] = useState(STAGE_UNIT_TEMPLATES[1].map(unit => unit.id));
   const [unitEnrollSelectedStudents, setUnitEnrollSelectedStudents] = useState([]);
@@ -112,6 +133,9 @@ const AdminDashboard = () => {
   const [adminProgFilter, setAdminProgFilter] = useState('');
   const [adminStageFilter, setAdminStageFilter] = useState('');
   const [adminBatchFilter, setAdminBatchFilter] = useState('');
+  const [attendanceViewMode, setAttendanceViewMode] = useState('overall');
+  const [attendanceMonthFilter, setAttendanceMonthFilter] = useState('');
+  const [attendanceModuleFilter, setAttendanceModuleFilter] = useState('');
 
   // Edit Student states
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -132,6 +156,23 @@ const AdminDashboard = () => {
   const [managedModuleId, setManagedModuleId] = useState('');
   const [managedModuleStudents, setManagedModuleStudents] = useState([]);
   const [managedAddStudentId, setManagedAddStudentId] = useState('');
+  const [assignmentTutorId, setAssignmentTutorId] = useState('');
+  const [assignmentStartDate, setAssignmentStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [assignmentEndDate, setAssignmentEndDate] = useState(new Date(Date.now() + 1000 * 60 * 60 * 24 * 90).toISOString().split('T')[0]);
+  const [assignmentModuleId, setAssignmentModuleId] = useState('');
+  const [assignmentProgramFilter, setAssignmentProgramFilter] = useState('');
+  const [assignmentBatchFilter, setAssignmentBatchFilter] = useState('');
+  const [assignmentSectionFilter, setAssignmentSectionFilter] = useState('');
+  const [newTutorName, setNewTutorName] = useState('');
+  const [newTutorEmail, setNewTutorEmail] = useState('');
+  const [newTutorPhone, setNewTutorPhone] = useState('');
+  const [newTutorDepartment, setNewTutorDepartment] = useState('');
+  const [newAdminName, setNewAdminName] = useState('');
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminPrivilege, setNewAdminPrivilege] = useState('partial');
+  const [newAdminPermissions, setNewAdminPermissions] = useState(DEFAULT_PARTIAL_ADMIN_PERMISSIONS);
+  const [resetTutorId, setResetTutorId] = useState('');
+  const [resetStudentId, setResetStudentId] = useState('');
 
   useEffect(() => {
     loadAllAdminData();
@@ -241,12 +282,48 @@ const AdminDashboard = () => {
     setUnitEnrollSelectedStudents(prev => prev.filter(id => eligibleIds.includes(id)));
   }, [students, unitEnrollProgram, unitEnrollStage, unitEnrollBatch, unitEnrollSection]);
 
+  useEffect(() => {
+    if (!assignmentModuleId && modules.length > 0) {
+      setAssignmentModuleId(modules[0].id);
+    }
+  }, [modules, assignmentModuleId]);
+
+  useEffect(() => {
+    const mod = modules.find(item => item.id === assignmentModuleId);
+    if (!mod) return;
+    setAssignmentTutorId(mod.tutor_id || tutors.find(t => t.name === mod.tutor)?.id || '');
+    setAssignmentStartDate(mod.class_start_date || new Date().toISOString().split('T')[0]);
+    setAssignmentEndDate(mod.class_end_date || new Date(Date.now() + 1000 * 60 * 60 * 24 * 90).toISOString().split('T')[0]);
+  }, [assignmentModuleId, modules, tutors]);
+
+  useEffect(() => {
+    const loadAttendanceRegisterStudents = async () => {
+      if (!attendanceModuleFilter) {
+        setAttendanceRegisterStudents([]);
+        return;
+      }
+
+      const mod = modules.find(item => item.id === attendanceModuleFilter);
+      const roster = await dbService.getEnrolledStudents(attendanceModuleFilter, mod?.section || null);
+      setAttendanceRegisterStudents(roster.slice().sort((a, b) => a.name.localeCompare(b.name)));
+    };
+
+    loadAttendanceRegisterStudents();
+  }, [attendanceModuleFilter, modules]);
+
   const loadAllAdminData = async () => {
+    const adminList = await dbService.getAdmins(true);
+    setAdmins(adminList);
+
     const bts = await dbService.getBatches();
     setBatches(bts);
 
     const progs = await dbService.getPrograms();
     setPrograms(progs);
+
+    const tutorList = await dbService.getTutors(true);
+    setTutors(tutorList);
+    if (!resetTutorId && tutorList.length > 0) setResetTutorId(tutorList[0].id);
 
     const mods = await dbService.getModules();
     setModules(mods);
@@ -260,6 +337,9 @@ const AdminDashboard = () => {
 
     const studs = await dbService.getStudents(null, null, null, null, null, true);
     setStudents(studs);
+    if (!resetStudentId && studs.length > 0) setResetStudentId(studs[0].id);
+    const summaries = await buildAttendanceSummaries(studs, mods, bts, progs);
+    setAttendanceSummaries(summaries);
 
     const lvs = await dbService.getLeaves();
     setLeaves(lvs);
@@ -278,6 +358,68 @@ const AdminDashboard = () => {
       setNewModProg(progs[0].id);
       setUnitEnrollProgram(progs[0].id);
     }
+  };
+
+  const buildAttendanceSummaries = async (studentList, moduleList, batchList, programList) => {
+    const moduleLookup = new Map(moduleList.map(mod => [mod.id, mod]));
+    const batchLookup = new Map(batchList.map(batch => [batch.id, batch]));
+    const programLookup = new Map(programList.map(program => [program.id, program]));
+
+    return Promise.all(studentList.map(async (student) => {
+      const history = await dbService.getStudentAttendanceHistory(student.id);
+      const totals = { P: 0, A: 0, L: 0, E: 0 };
+      const moduleMap = {};
+
+      history.forEach(record => {
+        if (totals[record.status] !== undefined) totals[record.status] += 1;
+        const mod = record.module || moduleLookup.get(record.moduleId) || {};
+        if (!moduleMap[record.moduleId]) {
+          const batch = batchLookup.get(mod.batch_id || record.batchId);
+          moduleMap[record.moduleId] = {
+            moduleId: record.moduleId,
+            title: mod.title || record.moduleTitle || 'Unknown Module',
+            tutor: mod.tutor || record.tutor || 'Unassigned',
+            batchTitle: batch?.title || mod.batch_id || record.batchId || 'Unknown Batch',
+            section: mod.section || record.section || student.section,
+            stage: mod.stage || student.stage,
+            trimester: mod.trimester || student.trimester,
+            totals: { P: 0, A: 0, L: 0, E: 0 },
+            totalMarked: 0,
+            rate: 0,
+            records: []
+          };
+        }
+        if (moduleMap[record.moduleId].totals[record.status] !== undefined) {
+          moduleMap[record.moduleId].totals[record.status] += 1;
+        }
+        moduleMap[record.moduleId].totalMarked += 1;
+        moduleMap[record.moduleId].records.push(record);
+      });
+
+      const totalMarked = totals.P + totals.A + totals.L + totals.E;
+      const attended = totals.P + totals.L + totals.E;
+      const moduleBreakdown = Object.values(moduleMap).map(item => ({
+        ...item,
+        rate: item.totalMarked > 0
+          ? Math.round(((item.totals.P + item.totals.L + item.totals.E) / item.totalMarked) * 100)
+          : 0
+      })).sort((a, b) => a.title.localeCompare(b.title));
+
+      const batch = batchLookup.get(student.batch_id);
+      const program = programLookup.get(student.program_id);
+
+      return {
+        student,
+        batchTitle: batch?.title || 'Unknown Batch',
+        programTitle: program?.title || 'Unknown Program',
+        totals,
+        totalMarked,
+        attended,
+        absent: totals.A,
+        rate: totalMarked > 0 ? Math.round((attended / totalMarked) * 100) : 0,
+        moduleBreakdown
+      };
+    }));
   };
 
   // --- Bulk Cohort Migration Calculations ---
@@ -416,7 +558,6 @@ const AdminDashboard = () => {
     const selectedUnits = (STAGE_UNIT_TEMPLATES[unitEnrollStage] || [])
       .slice(0, 6)
       .filter(unit => selectedStageUnitIds.includes(unit.id));
-    const tutorName = unitEnrollTutor.trim();
     const resolvedModuleIds = [];
     const knownModules = [...modules];
 
@@ -430,7 +571,6 @@ const AdminDashboard = () => {
           program_id: unitEnrollProgram,
           stage: unitEnrollStage,
           trimester: unit.trimester,
-          tutor: tutorName,
           batch_id: unitEnrollBatch,
           section: unitEnrollSection
         });
@@ -441,7 +581,7 @@ const AdminDashboard = () => {
           unitEnrollProgram,
           unitEnrollStage,
           unit.trimester,
-          tutorName,
+          'Unassigned',
           unitEnrollBatch,
           unitEnrollSection
         );
@@ -451,7 +591,8 @@ const AdminDashboard = () => {
           program_id: unitEnrollProgram,
           stage: parseInt(unitEnrollStage),
           trimester: unit.trimester,
-          tutor: tutorName,
+          tutor: 'Unassigned',
+          tutor_id: null,
           batch_id: unitEnrollBatch,
           section: unitEnrollSection
         });
@@ -466,11 +607,6 @@ const AdminDashboard = () => {
   const handleEnrollStageUnits = async () => {
     if (!unitEnrollProgram || !unitEnrollStage || !unitEnrollBatch || !unitEnrollSection) {
       alert("Please choose the program, stage, batch, and section.");
-      return;
-    }
-
-    if (!unitEnrollTutor.trim()) {
-      alert("Please enter the tutor name for this module registration.");
       return;
     }
 
@@ -493,7 +629,11 @@ const AdminDashboard = () => {
     const moduleIds = await ensureSelectedStageUnitModules();
     await Promise.all(moduleIds.map(moduleId => dbService.bulkEnroll(studentIds, moduleId)));
 
-    alert(`Enrolled ${studentIds.length} student(s) into ${moduleIds.length} selected unit(s).`);
+    Swal.fire({
+      icon: 'success',
+      title: 'Students enrolled',
+      text: `Enrolled ${studentIds.length} student(s) into ${moduleIds.length} selected unit(s).`
+    });
     setUnitEnrollSelectedStudents([]);
     await loadAllAdminData();
   };
@@ -553,8 +693,219 @@ const AdminDashboard = () => {
     await loadManagedModuleRoster();
   };
 
+  const handleAssignTutorToModule = async () => {
+    if (!requireFullAdmin()) return;
+    if (!assignmentModuleId) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Module required',
+        text: 'Please select a module instance to assign.'
+      });
+      return;
+    }
+
+    const tutor = tutors.find(t => t.id === assignmentTutorId);
+    if (!tutor) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Tutor required',
+        text: 'Please select a tutor account.'
+      });
+      return;
+    }
+
+    if (!assignmentStartDate || !assignmentEndDate || assignmentStartDate > assignmentEndDate) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Invalid date window',
+        text: 'Please provide a valid assignment start and end date.'
+      });
+      return;
+    }
+
+    await dbService.updateModule(assignmentModuleId, {
+      tutor: tutor.name,
+      tutor_id: tutor.id,
+      class_start_date: assignmentStartDate,
+      class_end_date: assignmentEndDate
+    });
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Tutor assigned',
+      text: `${tutor.name} has been assigned to this module.`
+    });
+    await loadAllAdminData();
+  };
+
+  const handleAddTutor = async () => {
+    if (!requireFullAdmin()) return;
+    if (!newTutorName.trim() || !newTutorEmail.trim()) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Tutor details required',
+        text: 'Please enter tutor name and college email.'
+      });
+      return;
+    }
+
+    const result = await dbService.addTutor(
+      newTutorName.trim(),
+      newTutorEmail.trim(),
+      newTutorPhone.trim(),
+      newTutorDepartment.trim()
+    );
+
+    if (result?.error) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Tutor not created',
+        text: result.error
+      });
+      return;
+    }
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Tutor account created',
+      html: `Username: <strong>${result.email}</strong><br />Default password: <strong>ChangeMe@123</strong>`
+    });
+    setNewTutorName('');
+    setNewTutorEmail('');
+    setNewTutorPhone('');
+    setNewTutorDepartment('');
+    await loadAllAdminData();
+  };
+
+  const requirePermission = (permissionId) => {
+    if (hasPermission(permissionId)) return true;
+    Swal.fire({
+      icon: 'error',
+      title: 'Permission denied',
+      text: 'Your admin account is not allowed to perform this action.'
+    });
+    return false;
+  };
+
+  const requireFullAdmin = () => requirePermission('access');
+
+  const toggleNewAdminPermission = (permissionId) => {
+    setNewAdminPermissions(prev => (
+      prev.includes(permissionId)
+        ? prev.filter(id => id !== permissionId)
+        : [...prev, permissionId]
+    ));
+  };
+
+  const handleAddAdmin = async () => {
+    if (!requireFullAdmin()) return;
+    if (!newAdminName.trim() || !newAdminEmail.trim()) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Admin details required',
+        text: 'Please enter admin name and email.'
+      });
+      return;
+    }
+    if (newAdminPrivilege === 'partial' && newAdminPermissions.length === 0) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Permissions required',
+        text: 'Please select at least one allowed area for this partial admin.'
+      });
+      return;
+    }
+
+    const permissions = newAdminPrivilege === 'full' ? ALL_ADMIN_PERMISSIONS : newAdminPermissions;
+    const result = await dbService.addAdmin(newAdminName.trim(), newAdminEmail.trim(), newAdminPrivilege, permissions);
+    if (result?.error) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Admin not created',
+        text: result.error
+      });
+      return;
+    }
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Admin user created',
+      html: `Username: <strong>${result.email}</strong><br />Default password: <strong>Admin@123</strong><br />Privilege: <strong>${result.privilege === 'full' ? 'Full' : 'Partial'}</strong>`
+    });
+    setNewAdminName('');
+    setNewAdminEmail('');
+    setNewAdminPrivilege('partial');
+    setNewAdminPermissions(DEFAULT_PARTIAL_ADMIN_PERMISSIONS);
+    await loadAllAdminData();
+  };
+
+  const handleResetTutorPassword = async () => {
+    if (!requireFullAdmin()) return;
+    if (!resetTutorId) return;
+    const tutor = tutors.find(item => item.id === resetTutorId);
+    const updated = await dbService.resetTutorPassword(resetTutorId);
+    Swal.fire({
+      icon: updated ? 'success' : 'error',
+      title: updated ? 'Tutor password reset' : 'Reset failed',
+      html: updated
+        ? `${tutor?.name || 'Tutor'} can now log in with <strong>ChangeMe@123</strong>.`
+        : 'Unable to reset tutor password.'
+    });
+    await loadAllAdminData();
+  };
+
+  const handleResetStudentPassword = async () => {
+    if (!requireFullAdmin()) return;
+    if (!resetStudentId) return;
+    const student = students.find(item => item.id === resetStudentId);
+    const updated = await dbService.resetStudentPassword(resetStudentId);
+    Swal.fire({
+      icon: updated ? 'success' : 'error',
+      title: updated ? 'Student password reset' : 'Reset failed',
+      html: updated
+        ? `${student?.name || 'Student'} can now log in with <strong>Student@123</strong>.`
+        : 'Unable to reset student password.'
+    });
+    await loadAllAdminData();
+  };
+
+  const handleEditAssignment = (moduleId) => {
+    setAssignmentModuleId(moduleId);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteAssignment = async (mod) => {
+    if (!requireFullAdmin()) return;
+    const result = await Swal.fire({
+      icon: 'warning',
+      title: 'Remove tutor assignment?',
+      text: `This will unassign ${mod.tutor || 'the tutor'} from ${mod.title}.`,
+      showCancelButton: true,
+      confirmButtonText: 'Remove Assignment',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#dc2626'
+    });
+
+    if (!result.isConfirmed) return;
+
+    await dbService.updateModule(mod.id, {
+      tutor: 'Unassigned',
+      tutor_id: null,
+      class_start_date: null,
+      class_end_date: null
+    });
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Assignment removed',
+      text: 'The tutor assignment has been deleted.'
+    });
+    await loadAllAdminData();
+  };
+
   // --- Leave Application Auditing ---
   const handleAuditLeave = async (leaveId, status) => {
+    if (!requireFullAdmin()) return;
     await dbService.auditLeave(leaveId, status);
     alert(`Leave application marked as ${status}.`);
     const lvs = await dbService.getLeaves();
@@ -563,6 +914,7 @@ const AdminDashboard = () => {
 
   const handleAddStudent = async (e) => {
     e.preventDefault();
+    if (!requireFullAdmin()) return;
     if (!newStudentName) {
       Swal.fire({
         icon: 'error',
@@ -593,9 +945,8 @@ const AdminDashboard = () => {
       Swal.fire({
         icon: 'success',
         title: 'Student Registered',
-        text: `Successfully registered new student: "${s.name}"`,
+        html: `Successfully registered new student: <strong>${s.name}</strong><br />Username: <strong>${s.email}</strong><br />Default password: <strong>Student@123</strong>`,
         confirmButtonColor: 'var(--brand-orange)',
-        timer: 2000
       });
       setNewStudentName('');
       setNewStudentContact('');
@@ -891,6 +1242,27 @@ const AdminDashboard = () => {
     (total, moduleId) => total + (moduleEnrollmentCounts[moduleId] || 0),
     0
   );
+  const assignmentFilteredModules = modules
+    .filter(mod => !assignmentProgramFilter || mod.program_id === assignmentProgramFilter)
+    .filter(mod => !assignmentBatchFilter || mod.batch_id === assignmentBatchFilter)
+    .filter(mod => !assignmentSectionFilter || mod.section === assignmentSectionFilter)
+    .sort((a, b) => `${a.program_id}-${a.batch_id}-${a.section}-${a.title}`.localeCompare(`${b.program_id}-${b.batch_id}-${b.section}-${b.title}`));
+  const assignmentSelectedModule = modules.find(mod => mod.id === assignmentModuleId);
+  const assignmentTutorLoads = tutors
+    .filter(tutor => tutor.status === 'Active')
+    .map(tutor => {
+    const assignedModules = modules.filter(mod => mod.tutor_id === tutor.id || mod.tutor === tutor.name);
+    return {
+      tutor: tutor.name,
+      email: tutor.email,
+      moduleCount: assignedModules.length,
+      batchCount: new Set(assignedModules.map(mod => mod.batch_id)).size,
+      sectionCount: new Set(assignedModules.map(mod => `${mod.batch_id}-${mod.section}`)).size
+    };
+  });
+  const assignedModuleRows = modules
+    .filter(mod => mod.tutor && mod.tutor !== 'Unassigned')
+    .sort((a, b) => `${a.tutor}-${a.batch_id}-${a.section}-${a.title}`.localeCompare(`${b.tutor}-${b.batch_id}-${b.section}-${b.title}`));
 
   // Filter Directory Table
   const filteredStudents = students.filter(s => {
@@ -899,9 +1271,126 @@ const AdminDashboard = () => {
     if (adminBatchFilter && s.batch_id !== adminBatchFilter) return false;
     return true;
   });
+  const attendanceMonthMatches = (date) => !attendanceMonthFilter || (date || '').slice(0, 7) === attendanceMonthFilter;
+  const recalculateModuleAttendance = (item) => {
+    const records = (item.records || []).filter(record => attendanceMonthMatches(record.date));
+    const totals = records.reduce((acc, record) => {
+      if (acc[record.status] !== undefined) acc[record.status] += 1;
+      return acc;
+    }, { P: 0, A: 0, L: 0, E: 0 });
+    const totalMarked = totals.P + totals.A + totals.L + totals.E;
+    const attended = totals.P + totals.L + totals.E;
+    return {
+      ...item,
+      records,
+      totals,
+      totalMarked,
+      rate: totalMarked > 0 ? Math.round((attended / totalMarked) * 100) : 0
+    };
+  };
+  const attendanceMonthOptions = Array.from(new Set(
+    attendanceSummaries.flatMap(summary => summary.moduleBreakdown.flatMap(item => (item.records || []).map(record => (record.date || '').slice(0, 7))))
+  )).filter(Boolean).sort((a, b) => b.localeCompare(a));
+  const monthFilteredAttendanceSummaries = attendanceSummaries.map(summary => {
+    const moduleBreakdown = summary.moduleBreakdown
+      .map(recalculateModuleAttendance)
+      .filter(item => item.totalMarked > 0);
+    const totals = moduleBreakdown.reduce((acc, item) => {
+      acc.P += item.totals.P;
+      acc.A += item.totals.A;
+      acc.L += item.totals.L;
+      acc.E += item.totals.E;
+      return acc;
+    }, { P: 0, A: 0, L: 0, E: 0 });
+    const totalMarked = totals.P + totals.A + totals.L + totals.E;
+    const attended = totals.P + totals.L + totals.E;
+    return {
+      ...summary,
+      totals,
+      totalMarked,
+      attended,
+      absent: totals.A,
+      rate: totalMarked > 0 ? Math.round((attended / totalMarked) * 100) : 0,
+      moduleBreakdown
+    };
+  });
+  const filteredAttendanceSummaries = monthFilteredAttendanceSummaries.filter(summary => {
+    const s = summary.student;
+    const query = studentSearch.trim().toLowerCase();
+    if (adminProgFilter && s.program_id !== adminProgFilter) return false;
+    if (adminStageFilter && s.stage !== parseInt(adminStageFilter)) return false;
+    if (adminBatchFilter && s.batch_id !== adminBatchFilter) return false;
+    if (attendanceModuleFilter && !summary.moduleBreakdown.some(item => item.moduleId === attendanceModuleFilter)) return false;
+    if (query) {
+      const searchable = `${s.name} ${s.email} ${s.student_code || ''} ${summary.batchTitle} ${summary.programTitle}`.toLowerCase();
+      if (!searchable.includes(query)) return false;
+    }
+    return true;
+  }).sort((a, b) => a.student.name.localeCompare(b.student.name));
+  const visibleAttendanceSummaries = filteredAttendanceSummaries.filter(summary => summary.totalMarked > 0);
+  const selectedAttendanceModule = modules.find(mod => mod.id === attendanceModuleFilter);
+  const selectedAttendanceBatch = selectedAttendanceModule
+    ? batches.find(batch => batch.id === selectedAttendanceModule.batch_id)
+    : null;
+  const selectedAttendanceProgram = selectedAttendanceModule
+    ? programs.find(program => program.id === selectedAttendanceModule.program_id)
+    : null;
+  const attendanceSummaryByStudentId = new Map(monthFilteredAttendanceSummaries.map(summary => [summary.student.id, summary]));
+  const registerRows = attendanceModuleFilter
+    ? attendanceRegisterStudents
+        .filter(student => {
+          const query = studentSearch.trim().toLowerCase();
+          if (adminProgFilter && student.program_id !== adminProgFilter) return false;
+          if (adminStageFilter && student.stage !== parseInt(adminStageFilter)) return false;
+          if (adminBatchFilter && student.batch_id !== adminBatchFilter) return false;
+          if (!query) return true;
+          const summary = attendanceSummaryByStudentId.get(student.id);
+          const searchable = `${student.name} ${student.email} ${student.student_code || ''} ${summary?.batchTitle || ''} ${summary?.programTitle || ''}`.toLowerCase();
+          return searchable.includes(query);
+        })
+        .map(student => {
+          const fallbackBatch = batches.find(batch => batch.id === student.batch_id);
+          const fallbackProgram = programs.find(program => program.id === student.program_id);
+          const summary = attendanceSummaryByStudentId.get(student.id) || {
+            student,
+            batchTitle: fallbackBatch?.title || 'Unknown Batch',
+            programTitle: fallbackProgram?.title || 'Unknown Program',
+            moduleBreakdown: []
+          };
+          const emptyModuleAttendance = {
+            moduleId: attendanceModuleFilter,
+            title: selectedAttendanceModule?.title || 'Unknown Module',
+            tutor: selectedAttendanceModule?.tutor || 'Unassigned',
+            batchTitle: selectedAttendanceBatch?.title || selectedAttendanceModule?.batch_id || 'Unknown Batch',
+            section: selectedAttendanceModule?.section || student.section,
+            stage: selectedAttendanceModule?.stage || student.stage,
+            trimester: selectedAttendanceModule?.trimester || student.trimester,
+            totals: { P: 0, A: 0, L: 0, E: 0 },
+            totalMarked: 0,
+            rate: 0,
+            records: []
+          };
+          return {
+            ...summary,
+            student,
+            moduleAttendance: summary.moduleBreakdown.find(item => item.moduleId === attendanceModuleFilter) || emptyModuleAttendance
+          };
+        })
+    : [];
+  const registerDateColumns = Array.from(new Set(
+    registerRows.flatMap(summary => (summary.moduleAttendance?.records || []).map(record => record.date))
+  )).sort((a, b) => new Date(a) - new Date(b));
 
   const pendingLeaves = leaves.filter(l => l.status === 'Pending');
   const activeStudentsCount = students.filter(s => s.status === 'Active').length;
+  const activeAdmin = admins.find(admin => admin.id === adminId) || admins.find(admin => admin.privilege === 'full') || null;
+  const isFullAdmin = !activeAdmin || activeAdmin.privilege === 'full';
+  const activeAdminPermissions = isFullAdmin
+    ? ALL_ADMIN_PERMISSIONS
+    : (Array.isArray(activeAdmin?.permissions) && activeAdmin.permissions.length > 0
+      ? activeAdmin.permissions
+      : DEFAULT_PARTIAL_ADMIN_PERMISSIONS);
+  const hasPermission = (permissionId) => isFullAdmin || activeAdminPermissions.includes(permissionId);
   const sectionCount = new Set(
     batches.flatMap(b => b && b.sections ? b.sections.split(',').map(s => s.trim()) : [])
   ).size;
@@ -911,12 +1400,21 @@ const AdminDashboard = () => {
     { id: 'setup', label: 'Setup' },
     { id: 'leaves', label: 'Leaves' },
     { id: 'students', label: 'Students' },
+    { id: 'attendance', label: 'Attendance' },
+    { id: 'access', label: 'Access' },
     { id: 'modules', label: 'Modules' },
+    { id: 'assignments', label: 'Tutor Assignments' },
     { id: 'batches', label: 'Batches' },
     { id: 'programs', label: 'Programs' },
     { id: 'migrations', label: 'History' }
-  ];
-  const directoryTabs = ['students', 'modules', 'batches', 'programs', 'migrations'];
+  ].filter(tab => hasPermission(tab.id));
+  const directoryTabs = ['students', 'attendance', 'access', 'modules', 'assignments', 'batches', 'programs', 'migrations'].filter(hasPermission);
+
+  useEffect(() => {
+    if (adminTabs.length > 0 && !adminTabs.some(tab => tab.id === activeTab)) {
+      setActiveTab(adminTabs[0].id);
+    }
+  }, [activeTab, adminTabs]);
 
   return (
     <div className="admin-console">
@@ -925,6 +1423,11 @@ const AdminDashboard = () => {
           <span className="admin-eyebrow">Administrator workspace</span>
           <h2>Academic Operations Control</h2>
           <p>Manage cohorts, student records, intakes, modules, and leave decisions from one focused console.</p>
+          {activeAdmin && (
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBlockStart: '0.35rem' }}>
+              Signed in as <strong>{activeAdmin.name}</strong> • {isFullAdmin ? 'Full administrator' : 'Partial administrator'}
+            </p>
+          )}
         </div>
 
         <div className="admin-metric-grid">
@@ -1164,7 +1667,7 @@ const AdminDashboard = () => {
       )}
 
       {/* SECTION 2: LEAVE APPLICATIONS ARBITRATOR */}
-      {(activeTab === 'overview' || activeTab === 'leaves') && (
+      {((activeTab === 'overview' && hasPermission('leaves')) || activeTab === 'leaves') && (
       <div className="glass-card">
         <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBlockEnd: '1rem', color: 'var(--brand-blue)' }}>
           Leave Applications Audit Queue
@@ -1195,7 +1698,7 @@ const AdminDashboard = () => {
       )}
 
       {/* SECTION 3: ADD ENTITIES AND SUMMARY DIRECTORY */}
-      {(activeTab === 'overview' || activeTab === 'setup') && (
+      {((activeTab === 'overview' && hasPermission('setup')) || activeTab === 'setup') && (
       <div className="admin-grid">
 
         {/* Left: Quick Setup additions */}
@@ -1466,6 +1969,7 @@ const AdminDashboard = () => {
           <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.03)', padding: '0.3rem', borderRadius: '12px', border: '1px solid var(--border-glass)', gap: '0.25rem' }}>
               {[
               { id: 'students', label: 'Student Roster' },
+              { id: 'attendance', label: 'Attendance' },
               { id: 'modules', label: 'Modules' },
               { id: 'batches', label: 'Intakes & Sections' },
               { id: 'programs', label: 'Programs Grid' },
@@ -1640,6 +2144,325 @@ const AdminDashboard = () => {
             </div>
           )}
 
+          {/* TAB: ATTENDANCE OVERVIEW */}
+          {activeTab === 'attendance' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', color: 'var(--brand-blue)', marginBlockEnd: '0.2rem' }}>Attendance</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Review overall attendance cards or switch to a monthly module register sheet.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <button type="button" className={`admin-workspace-tab ${attendanceViewMode === 'overall' ? 'active' : ''}`} onClick={() => setAttendanceViewMode('overall')}>Overall View</button>
+                <button type="button" className={`admin-workspace-tab ${attendanceViewMode === 'register' ? 'active' : ''}`} onClick={() => setAttendanceViewMode('register')}>Register View</button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                <input type="text" className="form-input" placeholder="Search student, email, batch..." value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
+                <select className="form-select" value={adminProgFilter} onChange={(e) => setAdminProgFilter(e.target.value)}>
+                  <option value="">All Programs</option>
+                  {programs.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                </select>
+                <select className="form-select" value={adminBatchFilter} onChange={(e) => setAdminBatchFilter(e.target.value)}>
+                  <option value="">All Batches</option>
+                  {batches.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+                </select>
+                <select className="form-select" value={adminStageFilter} onChange={(e) => setAdminStageFilter(e.target.value)}>
+                  <option value="">All Stages</option>
+                  <option value="1">Stage 1</option>
+                  <option value="2">Stage 2</option>
+                  <option value="3">Stage 3</option>
+                </select>
+                <select className="form-select" value={attendanceMonthFilter} onChange={(e) => setAttendanceMonthFilter(e.target.value)}>
+                  <option value="">All Months</option>
+                  {attendanceMonthOptions.map(month => (
+                    <option key={month} value={month}>{new Date(`${month}-01`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</option>
+                  ))}
+                </select>
+                <select className="form-select" value={attendanceModuleFilter} onChange={(e) => setAttendanceModuleFilter(e.target.value)}>
+                  <option value="">{attendanceViewMode === 'register' ? 'Select Module Register' : 'All Modules'}</option>
+                  {modules.slice().sort((a, b) => a.title.localeCompare(b.title)).map(mod => (
+                    <option key={mod.id} value={mod.id}>{mod.title} | {mod.tutor || 'Unassigned'} | Sec {mod.section}</option>
+                  ))}
+                </select>
+              </div>
+
+              {attendanceViewMode === 'overall' && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.75rem' }}>
+                    <div className="admin-metric-card"><span>Students Shown</span><strong>{visibleAttendanceSummaries.length}</strong></div>
+                    <div className="admin-metric-card"><span>Marked Records</span><strong>{visibleAttendanceSummaries.reduce((sum, item) => sum + item.totalMarked, 0)}</strong></div>
+                    <div className="admin-metric-card">
+                      <span>Average Rate</span>
+                      <strong>{visibleAttendanceSummaries.length > 0 ? Math.round(visibleAttendanceSummaries.reduce((sum, item) => sum + item.rate, 0) / visibleAttendanceSummaries.length) : 0}%</strong>
+                    </div>
+                  </div>
+
+                  {visibleAttendanceSummaries.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', border: '1px solid var(--border-glass)', borderRadius: '10px' }}>
+                      No attendance records match the selected filters.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                      {visibleAttendanceSummaries.map(summary => {
+                        const s = summary.student;
+                        return (
+                          <div key={`attendance-card-${s.id}`} style={{ border: '1px solid var(--border-glass)', borderRadius: '10px', padding: '1rem', background: 'rgba(255,255,255,0.75)' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.4fr) repeat(5, minmax(70px, 0.35fr))', gap: '0.75rem', alignItems: 'center' }}>
+                              <div>
+                                <h4 style={{ margin: 0, color: 'var(--brand-blue)', fontSize: '0.95rem' }}>{s.name}</h4>
+                                <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                                  {summary.programTitle} • {summary.batchTitle} • Stage {s.stage} Tri {s.trimester} • Sec {s.section}
+                                </p>
+                                <code style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{s.student_code || s.id}</code>
+                              </div>
+                              <div><span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)' }}>Rate</span><strong style={{ color: summary.rate >= 80 ? 'var(--accent-present)' : summary.rate >= 60 ? 'var(--accent-late)' : 'var(--accent-absent)' }}>{summary.rate}%</strong></div>
+                              <div><span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)' }}>Present</span><strong>{summary.totals.P}</strong></div>
+                              <div><span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)' }}>Late</span><strong>{summary.totals.L}</strong></div>
+                              <div><span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)' }}>Excused</span><strong>{summary.totals.E}</strong></div>
+                              <div><span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)' }}>Absent</span><strong style={{ color: 'var(--accent-absent)' }}>{summary.totals.A}</strong></div>
+                            </div>
+
+                            <div style={{ overflowX: 'auto', border: '1px solid var(--border-glass)', borderRadius: '8px', marginBlockStart: '0.85rem' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem', minWidth: '760px' }}>
+                                <thead>
+                                  <tr style={{ background: 'rgba(15, 23, 42, 0.04)', color: 'var(--brand-blue)' }}>
+                                    <th style={{ padding: '0.65rem', textAlign: 'left' }}>Module</th>
+                                    <th style={{ padding: '0.65rem', textAlign: 'left' }}>Batch / Section</th>
+                                    <th style={{ padding: '0.65rem', textAlign: 'left' }}>Tutor</th>
+                                    <th style={{ padding: '0.65rem', textAlign: 'center' }}>P</th>
+                                    <th style={{ padding: '0.65rem', textAlign: 'center' }}>L</th>
+                                    <th style={{ padding: '0.65rem', textAlign: 'center' }}>E</th>
+                                    <th style={{ padding: '0.65rem', textAlign: 'center' }}>A</th>
+                                    <th style={{ padding: '0.65rem', textAlign: 'center' }}>Rate</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {summary.moduleBreakdown.map(item => (
+                                    <tr key={`${s.id}-${item.moduleId}`} style={{ borderBlockStart: '1px solid var(--border-glass)' }}>
+                                      <td style={{ padding: '0.65rem', fontWeight: 700 }}>{item.title}</td>
+                                      <td style={{ padding: '0.65rem' }}>{item.batchTitle} • Sec {item.section} • S{item.stage}T{item.trimester}</td>
+                                      <td style={{ padding: '0.65rem' }}>{item.tutor || 'Unassigned'}</td>
+                                      <td style={{ padding: '0.65rem', textAlign: 'center' }}>{item.totals.P}</td>
+                                      <td style={{ padding: '0.65rem', textAlign: 'center' }}>{item.totals.L}</td>
+                                      <td style={{ padding: '0.65rem', textAlign: 'center' }}>{item.totals.E}</td>
+                                      <td style={{ padding: '0.65rem', textAlign: 'center', color: 'var(--accent-absent)', fontWeight: 800 }}>{item.totals.A}</td>
+                                      <td style={{ padding: '0.65rem', textAlign: 'center', color: item.rate >= 80 ? 'var(--accent-present)' : item.rate >= 60 ? 'var(--accent-late)' : 'var(--accent-absent)', fontWeight: 900 }}>{item.rate}%</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {attendanceViewMode === 'register' && (
+                <>
+                  {selectedAttendanceModule && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '0.75rem', border: '1px solid var(--border-glass)', borderRadius: '10px', padding: '0.85rem', background: 'rgba(15, 23, 42, 0.02)' }}>
+                      <div><span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>MODULE</span><strong style={{ color: 'var(--brand-blue)' }}>{selectedAttendanceModule.title}</strong></div>
+                      <div><span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>TUTOR</span><strong>{selectedAttendanceModule.tutor || 'Unassigned'}</strong></div>
+                      <div><span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>BATCH / SECTION</span><strong>{selectedAttendanceBatch?.title || selectedAttendanceModule.batch_id || 'Unknown'} - Sec {selectedAttendanceModule.section}</strong></div>
+                      <div><span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700 }}>PROGRAM</span><strong>{selectedAttendanceProgram?.title || selectedAttendanceModule.program_id}</strong></div>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.75rem' }}>
+                    <div className="admin-metric-card"><span>Students In Register</span><strong>{registerRows.length}</strong></div>
+                    <div className="admin-metric-card"><span>Register Dates</span><strong>{registerDateColumns.length}</strong></div>
+                    <div className="admin-metric-card">
+                      <span>Average Rate</span>
+                      <strong>{registerRows.length > 0 ? Math.round(registerRows.reduce((sum, item) => sum + (item.moduleAttendance?.rate || 0), 0) / registerRows.length) : 0}%</strong>
+                    </div>
+                  </div>
+
+                  {!attendanceModuleFilter ? (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', border: '1px solid var(--border-glass)', borderRadius: '10px' }}>
+                      Please select a module to display the register.
+                    </div>
+                  ) : registerRows.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', border: '1px solid var(--border-glass)', borderRadius: '10px' }}>
+                      No enrolled students are available for this module.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto', border: '1px solid var(--border-glass)', borderRadius: '10px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: `${620 + registerDateColumns.length * 44}px`, fontSize: '0.78rem' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(15, 23, 42, 0.04)', color: 'var(--brand-blue)' }}>
+                            <th style={{ padding: '0.7rem', textAlign: 'center', border: '1px solid var(--border-glass)', width: '48px' }}>SN</th>
+                            <th style={{ padding: '0.7rem', textAlign: 'left', border: '1px solid var(--border-glass)', minWidth: '210px' }}>Name of Student</th>
+                            <th style={{ padding: '0.7rem', textAlign: 'left', border: '1px solid var(--border-glass)', minWidth: '120px' }}>Student ID</th>
+                            {registerDateColumns.map(date => (
+                              <th key={date} style={{ padding: '0.45rem', textAlign: 'center', border: '1px solid var(--border-glass)', minWidth: '42px' }}>{new Date(date).getDate()}</th>
+                            ))}
+                            <th style={{ padding: '0.7rem', textAlign: 'center', border: '1px solid var(--border-glass)' }}>P</th>
+                            <th style={{ padding: '0.7rem', textAlign: 'center', border: '1px solid var(--border-glass)' }}>L</th>
+                            <th style={{ padding: '0.7rem', textAlign: 'center', border: '1px solid var(--border-glass)' }}>E</th>
+                            <th style={{ padding: '0.7rem', textAlign: 'center', border: '1px solid var(--border-glass)' }}>A</th>
+                            <th style={{ padding: '0.7rem', textAlign: 'center', border: '1px solid var(--border-glass)' }}>Attendance %</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {registerRows.map((summary, idx) => {
+                            const s = summary.student;
+                            const item = summary.moduleAttendance;
+                            const recordMap = new Map((item.records || []).map(record => [record.date, record]));
+                            return (
+                              <tr key={`${s.id}-${item.moduleId}`}>
+                                <td style={{ padding: '0.6rem', textAlign: 'center', border: '1px solid var(--border-glass)', fontWeight: 700 }}>{idx + 1}</td>
+                                <td style={{ padding: '0.6rem', border: '1px solid var(--border-glass)', fontWeight: 700 }}>{s.name}</td>
+                                <td style={{ padding: '0.6rem', border: '1px solid var(--border-glass)' }}>{s.student_code || s.id}</td>
+                                {registerDateColumns.map(date => {
+                                  const status = recordMap.get(date)?.status || '';
+                                  return (
+                                    <td key={`${s.id}-${date}`} style={{ padding: '0.45rem', textAlign: 'center', border: '1px solid var(--border-glass)', fontWeight: 800, color: status === 'A' ? 'var(--accent-absent)' : status === 'L' ? 'var(--accent-late)' : status === 'E' ? 'var(--brand-blue)' : 'var(--accent-present)' }}>
+                                      {status || '-'}
+                                    </td>
+                                  );
+                                })}
+                                <td style={{ padding: '0.6rem', textAlign: 'center', border: '1px solid var(--border-glass)' }}>{item.totals.P}</td>
+                                <td style={{ padding: '0.6rem', textAlign: 'center', border: '1px solid var(--border-glass)' }}>{item.totals.L}</td>
+                                <td style={{ padding: '0.6rem', textAlign: 'center', border: '1px solid var(--border-glass)' }}>{item.totals.E}</td>
+                                <td style={{ padding: '0.6rem', textAlign: 'center', border: '1px solid var(--border-glass)', color: 'var(--accent-absent)', fontWeight: 800 }}>{item.totals.A}</td>
+                                <td style={{ padding: '0.6rem', textAlign: 'center', border: '1px solid var(--border-glass)', fontWeight: 900, color: item.rate >= 80 ? 'var(--accent-present)' : item.rate >= 60 ? 'var(--accent-late)' : 'var(--accent-absent)' }}>{item.rate}%</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TAB: ACCESS CONTROL */}
+          {activeTab === 'access' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', color: 'var(--brand-blue)', marginBlockEnd: '0.2rem' }}>Admin Access Control</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Create admin accounts and reset tutor or student passwords. Full administrator access is required.
+                </p>
+              </div>
+
+              {!isFullAdmin && (
+                <div style={{ border: '1px solid rgba(245, 158, 11, 0.35)', borderRadius: '8px', padding: '0.85rem', color: 'var(--accent-late)', background: 'rgba(245, 158, 11, 0.08)', fontSize: '0.85rem' }}>
+                  You are signed in as a partial administrator. Access tools are visible, but changes are restricted to full administrators.
+                </div>
+              )}
+
+              <div className="module-admin-workspace">
+                <div className="module-builder-panel">
+                  <div className="module-panel-heading">
+                    <h4>Create Admin User</h4>
+                    <span>New admins use email as username and the default password Admin@123</span>
+                  </div>
+                  <div className="module-builder-grid">
+                    <div className="form-group">
+                      <label>Admin Name</label>
+                      <input className="form-input" placeholder="Full name" value={newAdminName} onChange={(e) => setNewAdminName(e.target.value)} disabled={!isFullAdmin} />
+                    </div>
+                    <div className="form-group">
+                      <label>Admin Email</label>
+                      <input className="form-input" type="email" placeholder="admin@ismt.edu.np" value={newAdminEmail} onChange={(e) => setNewAdminEmail(e.target.value)} disabled={!isFullAdmin} />
+                    </div>
+                    <div className="form-group">
+                      <label>Privilege</label>
+                      <select className="form-select" value={newAdminPrivilege} onChange={(e) => setNewAdminPrivilege(e.target.value)} disabled={!isFullAdmin}>
+                        <option value="partial">Partial Privilege</option>
+                        <option value="full">Full Privilege</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {newAdminPrivilege === 'partial' && (
+                    <div style={{ border: '1px solid var(--border-glass)', borderRadius: '8px', padding: '0.75rem', marginBlockEnd: '0.85rem', background: 'rgba(15, 23, 42, 0.02)' }}>
+                      <h5 style={{ fontSize: '0.85rem', marginBlockEnd: '0.6rem', color: 'var(--brand-blue)' }}>Allowed Areas Checklist</h5>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.55rem' }}>
+                        {ADMIN_PERMISSION_OPTIONS.map(permission => (
+                          <label key={permission.id} className="checkbox-container" style={{ alignItems: 'flex-start', fontSize: '0.78rem', gap: '0.45rem' }}>
+                            <input
+                              type="checkbox"
+                              checked={newAdminPermissions.includes(permission.id)}
+                              onChange={() => toggleNewAdminPermission(permission.id)}
+                              disabled={!isFullAdmin}
+                            />
+                            <span>
+                              <strong>{permission.label}</strong>
+                              <small style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.68rem', marginBlockStart: '0.1rem' }}>{permission.description}</small>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button type="button" className="btn primary" style={{ justifyContent: 'center', width: '100%' }} onClick={handleAddAdmin} disabled={!isFullAdmin}>
+                    Create Admin
+                  </button>
+                </div>
+
+                <div className="module-roster-panel">
+                  <div className="module-panel-heading">
+                    <h4>Password Resets</h4>
+                    <span>Reset users back to their default password and force change on next login</span>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Tutor Account</label>
+                    <select className="form-select" value={resetTutorId} onChange={(e) => setResetTutorId(e.target.value)} disabled={!isFullAdmin}>
+                      {tutors.map(tutor => (
+                        <option key={tutor.id} value={tutor.id}>{tutor.name} | {tutor.email}</option>
+                      ))}
+                    </select>
+                    <button type="button" className="btn" style={{ width: '100%', justifyContent: 'center', marginBlockStart: '0.5rem' }} onClick={handleResetTutorPassword} disabled={!isFullAdmin || !resetTutorId}>
+                      Reset Tutor Password
+                    </button>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Student Account</label>
+                    <select className="form-select" value={resetStudentId} onChange={(e) => setResetStudentId(e.target.value)} disabled={!isFullAdmin}>
+                      {students.slice().sort((a, b) => a.name.localeCompare(b.name)).map(student => (
+                        <option key={student.id} value={student.id}>{student.name} | {student.email}</option>
+                      ))}
+                    </select>
+                    <button type="button" className="btn" style={{ width: '100%', justifyContent: 'center', marginBlockStart: '0.5rem' }} onClick={handleResetStudentPassword} disabled={!isFullAdmin || !resetStudentId}>
+                      Reset Student Password
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="module-ledger-grid">
+                {admins.map(admin => (
+                  <div key={admin.id} className="module-ledger-card">
+                    <div>
+                      <code>{admin.email}</code>
+                      <h4>{admin.name}</h4>
+                      <p>{admin.privilege === 'full' ? 'Full administrator' : 'Partial administrator'}</p>
+                    </div>
+                    <div className="module-ledger-meta">
+                      <span>{admin.status || 'Active'}</span>
+                      <span>{admin.privilege === 'full' ? 'Complete system privileges' : `${(admin.permissions || DEFAULT_PARTIAL_ADMIN_PERMISSIONS).length} allowed area(s)`}</span>
+                      {admin.privilege !== 'full' && (
+                        <span>{ADMIN_PERMISSION_OPTIONS.filter(permission => (admin.permissions || DEFAULT_PARTIAL_ADMIN_PERMISSIONS).includes(permission.id)).map(permission => permission.label).join(', ')}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {/* TAB 2: MODULE REGISTRATION LEDGER */}
           {activeTab === 'modules' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -1727,10 +2550,6 @@ const AdminDashboard = () => {
                             <option key={sec} value={sec}>Section {sec}</option>
                           ))}
                         </select>
-                      </div>
-                      <div className="form-group">
-                        <label>Tutor Name</label>
-                        <input type="text" className="form-input" placeholder="e.g. Dr. Susan Mahato" value={unitEnrollTutor} onChange={(e) => setUnitEnrollTutor(e.target.value)} />
                       </div>
                     </div>
 
@@ -1893,6 +2712,213 @@ const AdminDashboard = () => {
                         </div>
                       );
                     })
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: TUTOR ASSIGNMENTS */}
+          {activeTab === 'assignments' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', color: 'var(--brand-blue)', marginBlockEnd: '0.2rem' }}>Tutor Assignment System</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Assign one tutor to each module instance for a specific intake batch and section. The same tutor can own multiple modules, batches, and sections.
+                </p>
+              </div>
+
+              <div className="module-admin-workspace">
+                <div className="module-builder-panel">
+                  <div className="module-panel-heading">
+                    <h4>Add Tutor Account</h4>
+                    <span>Create credentials using the college email as username and the default password</span>
+                  </div>
+
+                  <div className="module-builder-grid">
+                    <div className="form-group">
+                      <label>Tutor Name</label>
+                      <input className="form-input" type="text" placeholder="e.g. Dr. Anita Sharma" value={newTutorName} onChange={(e) => setNewTutorName(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>College Email / Username</label>
+                      <input className="form-input" type="email" placeholder="name@ismt.edu.np" value={newTutorEmail} onChange={(e) => setNewTutorEmail(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>Contact Number</label>
+                      <input className="form-input" type="text" placeholder="Optional" value={newTutorPhone} onChange={(e) => setNewTutorPhone(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>Department</label>
+                      <input className="form-input" type="text" placeholder="e.g. Computing" value={newTutorDepartment} onChange={(e) => setNewTutorDepartment(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>Default Password</label>
+                      <div style={{ minHeight: '42px', display: 'flex', alignItems: 'center', border: '1px solid var(--border-glass)', borderRadius: '8px', padding: '0.55rem 0.75rem', color: 'var(--brand-blue)', background: '#f8fafc', fontSize: '0.85rem', fontWeight: 700 }}>
+                        ChangeMe@123
+                      </div>
+                    </div>
+                  </div>
+
+                  <button type="button" className="btn primary" style={{ justifyContent: 'center' }} onClick={handleAddTutor}>
+                    Create Tutor Credentials
+                  </button>
+                </div>
+
+                <div className="module-builder-panel">
+                  <div className="module-panel-heading">
+                    <h4>Assign Tutor</h4>
+                    <span>Choose the exact batch-section module instance, assignment window, and tutor owner</span>
+                  </div>
+
+                  <div className="module-builder-grid">
+                    <div className="form-group">
+                      <label>Program Filter</label>
+                      <select className="form-select" value={assignmentProgramFilter} onChange={(e) => setAssignmentProgramFilter(e.target.value)}>
+                        <option value="">All Programs</option>
+                        {programs.map(p => (
+                          <option key={p.id} value={p.id}>{p.title}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Batch Filter</label>
+                      <select className="form-select" value={assignmentBatchFilter} onChange={(e) => setAssignmentBatchFilter(e.target.value)}>
+                        <option value="">All Batches</option>
+                        {batches.map(b => (
+                          <option key={b.id} value={b.id}>{b.title}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Section Filter</label>
+                      <select className="form-select" value={assignmentSectionFilter} onChange={(e) => setAssignmentSectionFilter(e.target.value)}>
+                        <option value="">All Sections</option>
+                        {allUniqueSections.map(sec => (
+                          <option key={sec} value={sec}>Section {sec}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Module Instance</label>
+                      <select className="form-select" value={assignmentModuleId} onChange={(e) => {
+                        setAssignmentModuleId(e.target.value);
+                      }}>
+                        {assignmentFilteredModules.length === 0 ? (
+                          <option value="">No matching modules</option>
+                        ) : (
+                          assignmentFilteredModules.map(mod => {
+                            const batch = batches.find(b => b.id === mod.batch_id);
+                            return (
+                              <option key={mod.id} value={mod.id}>
+                                {mod.title} | {batch?.title || mod.batch_id || 'General'} | Sec {mod.section}
+                              </option>
+                            );
+                          })
+                        )}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Tutor Account</label>
+                      <select className="form-select" value={assignmentTutorId} onChange={(e) => setAssignmentTutorId(e.target.value)}>
+                        <option value="">Select Tutor</option>
+                        {tutors.filter(tutor => tutor.status === 'Active').map(tutor => (
+                          <option key={tutor.id} value={tutor.id}>{tutor.name} | {tutor.email}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Class Start Date</label>
+                      <input className="form-input" type="date" value={assignmentStartDate} onChange={(e) => setAssignmentStartDate(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>Class End Date</label>
+                      <input className="form-input" type="date" value={assignmentEndDate} onChange={(e) => setAssignmentEndDate(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>Current Assignment</label>
+                      <div style={{ minHeight: '42px', display: 'flex', alignItems: 'center', border: '1px solid var(--border-glass)', borderRadius: '8px', padding: '0.55rem 0.75rem', color: 'var(--text-muted)', background: '#f8fafc', fontSize: '0.8rem' }}>
+                        {assignmentSelectedModule ? `${assignmentSelectedModule.tutor || 'Unassigned'} • ${assignmentSelectedModule.class_start_date || 'No start'} to ${assignmentSelectedModule.class_end_date || 'No end'}` : 'Select a module'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button type="button" className="btn primary" style={{ justifyContent: 'center' }} onClick={handleAssignTutorToModule} disabled={!assignmentModuleId}>
+                    Save Tutor Assignment
+                  </button>
+                </div>
+
+                <div className="module-builder-panel">
+                  <div className="module-panel-heading">
+                    <h4>Tutor Load Summary</h4>
+                    <span>See which tutors are already covering multiple modules, batches, and sections</span>
+                  </div>
+
+                  <div className="module-registration-list" style={{ maxHeight: '360px' }}>
+                    {assignmentTutorLoads.length === 0 ? (
+                      <div style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
+                        No tutor assignments have been saved yet.
+                      </div>
+                    ) : (
+                      assignmentTutorLoads.map(load => (
+                        <div key={load.tutor} className="module-registration-student">
+                          <span>
+                            <strong>{load.tutor}</strong>
+                            <small>{load.email} • {load.moduleCount} module(s) across {load.batchCount} batch(es) and {load.sectionCount} section(s)</small>
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 style={{ fontSize: '1.05rem', color: 'var(--brand-blue)', marginBlockEnd: '0.2rem' }}>Current Tutor Assignments</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Review every active assignment, update its tutor/date window, or remove it from the module.
+                </p>
+              </div>
+
+              <div className="module-ledger-grid">
+                {assignedModuleRows.length === 0 ? (
+                  <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                    No tutor assignments have been configured yet.
+                  </div>
+                ) : (
+                  assignedModuleRows.map(mod => {
+                    const prog = programs.find(p => p.id === mod.program_id);
+                    const batch = batches.find(b => b.id === mod.batch_id);
+                    const tutor = tutors.find(t => t.id === mod.tutor_id || t.name === mod.tutor);
+                    return (
+                      <div key={`assignment-${mod.id}`} className="module-ledger-card">
+                        <div>
+                          <code>{mod.id}</code>
+                          <h4>{mod.title}</h4>
+                          <p>{prog?.title || 'Unknown Program'}</p>
+                        </div>
+                        <div className="module-ledger-meta">
+                          <span>{tutor?.email || 'No email linked'}</span>
+                          <span>{batch?.title || 'General Intake'}</span>
+                          <span>Sec {mod.section}</span>
+                          <span>Stage {mod.stage}</span>
+                          <span>Tri {mod.trimester}</span>
+                          <span>{mod.class_start_date || 'No start'} to {mod.class_end_date || 'No end'}</span>
+                        </div>
+                        <div className="module-ledger-footer">
+                          <span>{mod.tutor || 'Unassigned'}</span>
+                          <strong>{moduleEnrollmentCounts[mod.id] || 0} registered</strong>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBlockStart: '0.85rem' }}>
+                          <button type="button" className="btn" style={{ minHeight: '34px', justifyContent: 'center', fontSize: '0.78rem' }} onClick={() => handleEditAssignment(mod.id)}>
+                            Edit
+                          </button>
+                          <button type="button" className="btn" style={{ minHeight: '34px', justifyContent: 'center', fontSize: '0.78rem', color: 'var(--accent-absent)', borderColor: 'rgba(239,68,68,0.25)' }} onClick={() => handleDeleteAssignment(mod)}>
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -2314,3 +3340,4 @@ const AdminDashboard = () => {
 
 export default AdminDashboard;
 export { AdminDashboard };
+
